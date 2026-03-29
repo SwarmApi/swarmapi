@@ -1,8 +1,22 @@
 {
   "name": "swarm-worker",
   "version": "1.0.0",
+  "type": "commonjs",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "build": "pkg src/index.js --targets node16-linux-x64,node16-win-x64 --output worker"
   },
-  "dependencies": {}
+  "pkg": {
+    "assets": [],
+    "scripts": [
+      "src/updater.js"
+    ],
+    "targets": [
+      "node16-linux-x64",
+      "node16-win-x64"
+    ]
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  }
 }

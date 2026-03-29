@@ -4,7 +4,7 @@ const os = require('os');
 const { URL } = require('url');
 
 const PORT = process.env.PORT || 44444;
-const UPDATE_URL = process.env.UPDATE_URL || 'https://raw.githubusercontent.com/SwarmApi/swarmapi/main/versions.json';
+const UPDATE_URL = process.env.UPDATE_URL || 'https://raw.githubusercontent.com/SwarmApi/swarmapi/master/swarmapi/versions.json';
 
 let currentVersion = process.env.WORKER_VERSION || '0.0.0';
 let requestLogs = [];
@@ -47,13 +47,10 @@ function httpRequest(targetUrl, options = {}) {
   });
 }
 
-async function callOpenCode(messages, headers = {}) {
+const updater = require('./updater');
+
+async function callOpenCode(messages, model, headers = {}) {
   const openaiUrl = 'https://api.opencode.ai/v1/chat/completions';
-  
-  let body = '';
-  for (const msg of messages) {
-    body += msg.role + ': ' + msg.content + '\n';
-  }
   
   return httpRequest(openaiUrl, {
     method: 'POST',
@@ -64,7 +61,7 @@ async function callOpenCode(messages, headers = {}) {
       ...headers
     },
     body: JSON.stringify({
-      model: 'openai/gpt-5-nano',
+      model: model || 'gpt-5-nano',
       messages: messages,
       max_tokens: 4096
     })
@@ -147,12 +144,12 @@ function route(req, res) {
   }
   
   if (pathname === '/api/update' && method === 'POST') {
-    import('./updater.js').then(async ({ checkUpdate, forceUpdate }) => {
-      const result = await forceUpdate();
+    try {
+      const result = await updater.forceUpdate();
       res.end(JSON.stringify({ success: true, version: currentVersion, message: result }));
-    }).catch(err => {
+    } catch (err) {
       res.end(JSON.stringify({ success: false, error: err.message }));
-    });
+    }
     return;
   }
   
@@ -170,7 +167,8 @@ function route(req, res) {
       try {
         const parsed = JSON.parse(body);
         const messages = parsed.messages || [];
-        const result = await callOpenCode(messages, req.headers);
+        const model = parsed.model || 'gpt-5-nano';
+        const result = await callOpenCode(messages, model, req.headers);
         
         requestCount++;
         requestLogs.push(`[${new Date().toISOString()}] 响应成功 (${Date.now() - start}ms)`);
@@ -198,9 +196,9 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 端口: ${PORT}`);
   console.log(`📦 版本: ${currentVersion}`);
   
-  import('./updater.js').then(({ startUpdater }) => {
-    startUpdater();
-  }).catch(err => {
-    console.log('热更新模块加载失败:', err.message);
-  });
+  try {
+    updater.startUpdater();
+  } catch (err) {
+    console.log('热更新模块启动失败:', err.message);
+  }
 });
