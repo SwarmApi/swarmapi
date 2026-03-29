@@ -1,0 +1,11 @@
+{
+  "name": "swarm",
+  "version": "1.0.0",
+  "description": "Swarm CLI - Queen & Worker",
+  "main": "swarm.js",
+  "scripts": {
+    "start": "node swarm.js",
+    "queen": "ROLE=queen node swarm.js",
+    "worker": "ROLE=worker node swarm.js"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "swarm-queen",
+  "version": "1.0.0",
+  "description": "Swarm Queen - Local Agent Manager",
+  "main": "queen.js",
+  "scripts": {
+    "start": "node queen.js"
+  }
+}
