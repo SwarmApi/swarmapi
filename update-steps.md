@@ -16,7 +16,7 @@
 - **包含文件**:
   - `src/index.js` - 主程序，代理核心代码及热更新逻辑
   - `package.json` - npm 配置（仅 commonjs，node18-linux-x64）
-  - `worker` - pkg 生成的二进制文件（每次构建更新）
+  - `build.sh` - 打包脚本
 
 ### 3. `d:/code/claws/swarmapi/` - 运行包发布目录
 - **类型**: Git repo，指向 GitHub
@@ -27,7 +27,7 @@
   - `worker` - pkg 二进制文件（42MB）
   - `versions.json` - 版本信息
   - `worker-start.sh` - 启动脚本
-  - `Dockerfile` - 生产镜像定义（alpine，无需 wget）
+  - `Dockerfile` - 生产镜像定义（node:20-slim，基于 Debian）
 
 ---
 
@@ -36,8 +36,8 @@
 ### 开发阶段
 ```bash
 cd d:/code/claws/swarm-worker
-# 修改 src/*.js、Dockerfile、package.json 等
-# 本地测试：node src/index.js 或 docker build/run
+# 修改 src/*.js、package.json 等
+# 本地测试：node src/index.js 
 ```
 
 ### 打包与发布
@@ -58,7 +58,7 @@ git add .
 git commit -m "update worker to vX.X.X"
 git push origin master
 
-# 4. 构建 Docker 镜像
+# 4. 构建 Docker 镜像（在 swarmapi 目录，因为 Dockerfile 在那里）
 cd ../swarmapi
 docker build -t swarmapi/swarm-worker:latest .
 
@@ -149,8 +149,10 @@ set HTTP_PROXY=http://127.0.0.1:10808 && set HTTPS_PROXY=http://127.0.0.1:10808 
 ### 何时无需任何配置
 
 - **本地 Node.js 执行**：`node src/index.js`（源码直接运行）
-- **Docker 容器运行**：`docker run ...`（容器内部的网络由容器管理）
+- **Docker 容器运行（跳过自动更新）**：`docker run -e UPDATE_MODE=none ...`
 - **本地文件操作**：`cp`, 编辑文件等
+
+> **注意**：云容器通常可以直接访问外网，无需代理。本地测试时可设置 `UPDATE_MODE=none` 跳过自动更新。
 
 ---
 
@@ -166,7 +168,7 @@ set HTTP_PROXY=http://127.0.0.1:10808 && set HTTPS_PROXY=http://127.0.0.1:10808 
    - 仅用于本地工作区管理
 
 4. **Docker 构建包含完整的 worker 二进制**
-   - 从本地 `swarm-worker/worker` 复制
+   - build后输出在swarmapi目录下。
 
 5. **npm 使用淘宝源，GitHub/Docker 使用代理**
    - npm install/build 优先用淘宝源：`--registry https://registry.npmmirror.com`
@@ -181,8 +183,8 @@ set HTTP_PROXY=http://127.0.0.1:10808 && set HTTPS_PROXY=http://127.0.0.1:10808 
 # ========== 开发阶段 ==========
 cd d:/code/claws/swarm-worker
 
-# 编辑代码、Dockerfile、版本号等
-# 文件: src/index.js, Dockerfile, package.json
+# 编辑代码和版本号
+# 文件: src/index.js, package.json (Dockerfile 在 swarmapi 目录)
 
 # 本地测试（无需代理）
 node src/index.js
@@ -195,25 +197,24 @@ npm run build --registry https://registry.npmmirror.com
 # ========== 发布阶段（swarmapi目录） ==========
 cd ../swarmapi
 
-# 复制最新的 worker 和 versions.json
-cp ../swarm-worker/worker .
-cp ../swarm-worker/worker-start.sh .
-# 或者编辑 versions.json 更新版本号
+# 复制最新的 worker-start.sh（如有更新）
+# worker 已通过 npm run build 直接输出到 ../swarmapi/worker
+# 编辑 versions.json 更新版本号
 
 # 提交到 GitHub（需要代理）
 git add .
 git commit -m "update worker to vX.X.X"
 set HTTP_PROXY=http://127.0.0.1:10808 && set HTTPS_PROXY=http://127.0.0.1:10808 && git push origin master
 
-# ========== Docker 构建（需要代理拉取基础镜像） ==========
-cd ../swarm-worker
+# ========== Docker 构建（需要代理拉取基础镜像，在 swarmapi 目录） ==========
+cd ../swarmapi
 set HTTP_PROXY=http://127.0.0.1:10808 && set HTTPS_PROXY=http://127.0.0.1:10808 && docker build --network host -t swarmapi/swarm-worker:latest .
 
 # ========== Docker 推送（需要代理） ==========
 set HTTP_PROXY=http://127.0.0.1:10808 && set HTTPS_PROXY=http://127.0.0.1:10808 && docker push swarmapi/swarm-worker:latest
 
-# ========== 本地测试（无需代理） ==========
-docker run -d --name test-worker -p 44444:44444 swarmapi/swarm-worker:latest
+# ========== 本地测试（设置 UPDATE_MODE=none 跳过自动更新） ==========
+docker run -d --name test-worker -p 44444:44444 -e UPDATE_MODE=none swarmapi/swarm-worker:latest
 docker logs test-worker --tail 50
 powershell -Command "(Invoke-WebRequest -UseBasicParsing -Uri http://localhost:44444).StatusCode"
 ```
@@ -227,9 +228,9 @@ powershell -Command "(Invoke-WebRequest -UseBasicParsing -Uri http://localhost:4
 | 编辑代码 | swarm-worker | `code src/` | - |
 | 本地测试 | swarm-worker | `node src/index.js` | ❌ |
 | 打包二进制 | swarm-worker | `npm run build --registry https://registry.npmmirror.com` | ❌ |
-| 复制文件 | swarmapi | `# 已自动` | ❌ |
+| 复制文件 | swarmapi | `# 已自动（npm run build 输出到 swarmapi/worker）` | ❌ |
 | Git 推送 | swarmapi | `git push origin master` | ✅ |
-| Docker 构建 | swarm-worker | `docker build` | ✅（拉基础镜像） |
+| Docker 构建 | swarmapi | `docker build` | ✅（拉基础镜像） |
 | Docker 推送 | - | `docker push` | ✅ |
-| Docker 运行 | - | `docker run` | ❌ |
+| Docker 运行 | - | `docker run -e UPDATE_MODE=none` | ❌ (本地测试) |
 

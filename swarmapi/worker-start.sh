@@ -7,6 +7,17 @@ WORKER_START_URL="${WORKER_START_URL:-https://raw.githubusercontent.com/SwarmApi
 WORKER_START_PATH="${WORKER_START_PATH:-/app/worker-start.sh}"
 UPDATE_MODE="${UPDATE_MODE:-periodic}"
 CHECK_INTERVAL="${CHECK_INTERVAL:-3600}"
+VERSION_FILE="${VERSION_FILE:-/app/.worker_version}"
+
+get_saved_version() {
+    [ -f "$VERSION_FILE" ] && cat "$VERSION_FILE" || echo "0.0.0"
+}
+
+save_version() {
+    echo "$1" > "$VERSION_FILE"
+}
+
+WORKER_VERSION="${WORKER_VERSION:-$(get_saved_version)}"
 
 # UPDATE_MODE:
 #  - periodic: 脚本启动后按 CHECK_INTERVAL 轮询远程版本（默认一天）
@@ -162,7 +173,7 @@ update_self_script() {
 
 # 首次或版本更新检查
 prepare_worker() {
-    local current="${WORKER_VERSION:-0.0.0}"
+    local current="$WORKER_VERSION"
     local latest
     local worker_url
     local start_url
@@ -184,6 +195,7 @@ prepare_worker() {
             download_worker "$worker_url"
             update_self_script "$start_url"
             WORKER_VERSION="$latest"
+            save_version "$latest"
         else
             # 尝试更新脚本（即使版本相同）
             update_self_script "$start_url"
@@ -208,7 +220,7 @@ while true; do
     fi
 
     log "🚀 启动 Worker..."
-    UPDATE_MODE="$UPDATE_MODE" "$WORKER_PATH" &
+    WORKER_VERSION="$WORKER_VERSION" UPDATE_MODE="$UPDATE_MODE" "$WORKER_PATH" &
     WORKER_PID=$!
 
     if [ "$UPDATE_MODE" = "manual" ]; then
@@ -236,6 +248,7 @@ while true; do
             log "🛠️ 检测到新版本 $latest，更新并重启"
             if download_worker "${WORKER_BASE}/worker"; then
                 WORKER_VERSION="$latest"
+                save_version "$latest"
                 kill -TERM "$WORKER_PID" 2>/dev/null || true
                 break
             fi
