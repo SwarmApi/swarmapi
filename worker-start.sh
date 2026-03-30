@@ -18,7 +18,7 @@ log() {
 }
 
 fetch_version() {
-    wget -q -O - "$UPDATE_URL" 2>/dev/null || echo '{"version":"0.0.0"}'
+    curl -s "$UPDATE_URL" 2>/dev/null || echo '{"version":"0.0.0"}'
 }
 
 get_version() {
@@ -50,7 +50,7 @@ download_worker() {
     log "⬇️ 下载 Worker: $url"
     [ -d "$(dirname "$WORKER_PATH")" ] || mkdir -p "$(dirname "$WORKER_PATH")"
 
-    if wget -q -O "$WORKER_PATH.new" "$url"; then
+    if curl -s -o "$WORKER_PATH.new" "$url"; then
         chmod +x "$WORKER_PATH.new"
         mv -f "$WORKER_PATH.new" "$WORKER_PATH"
         log "✅ 下载完成"
@@ -92,7 +92,7 @@ update_self_script() {
     [ -n "$script_url" ] || return 0
 
     local tmp="/tmp/worker-start.sh.new"
-    if wget -q -O "$tmp" "$script_url"; then
+    if curl -s -o "$tmp" "$script_url"; then
         chmod +x "$tmp"
         if [ ! -f "$WORKER_START_PATH" ] || ! cmp -s "$tmp" "$WORKER_START_PATH"; then
             log "🔄 检测到 worker-start.sh 新版本，替换并重启脚本"
