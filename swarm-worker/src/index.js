@@ -22,6 +22,8 @@ let requestCount = 0;
 let startTime = Date.now();
 let isUpdating = false;
 let checkInterval = null;
+let lastHeartbeat = Date.now();
+const HEARTBEAT_INTERVAL = (process.env.HEARTBEAT_INTERVAL || 5) * 60 * 1000; // 默认5分钟
 
 const WORKER_PATH = process.env.WORKER_PATH || path.join(__dirname, '..', 'worker');
 const WORKER_START_PATH = process.env.WORKER_START_PATH || '/app/worker-start.sh';
@@ -335,6 +337,11 @@ async function route(req, res) {
     return res.end(workerHTML);
   }
   
+  if (pathname === '/health' || pathname === '/healthz') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ status: 'ok', version: currentVersion, uptime: Date.now() - startTime }));
+  }
+
   if (pathname === '/api/info') {
     return res.end(JSON.stringify({
       role: 'worker',
@@ -374,7 +381,7 @@ async function route(req, res) {
       try {
         const parsed = JSON.parse(body);
         const messages = parsed.messages || [];
-        const model = parsed.model || 'gpt-5-nano';
+        const model = parsed.model || 'big-pickle';
         const result = await callOpenCode(messages, model, req.headers);
         
         requestCount++;
@@ -408,4 +415,27 @@ server.listen(PORT, '0.0.0.0', () => {
   } catch (err) {
     log('热更新模块启动失败:', err.message);
   }
+
+  // 启动心跳日志：每N分钟打印一次进程状态
+  function printHeartbeat() {
+    const uptime = Date.now() - startTime;
+    const uptimeMinutes = Math.floor(uptime / 60000);
+    const uptimeHours = Math.floor(uptimeMinutes / 60);
+    const uptimeMins = uptimeMinutes % 60;
+    const mem = process.memoryUsage();
+    const memMB = Math.round(mem.heapUsed / 1024 / 1024);
+    const memMaxMB = Math.round(mem.heapTotal / 1024 / 1024);
+
+    const heartbeatLog = `💓 [心跳] 运行时间: ${uptimeHours}h${uptimeMins}m | 请求数: ${requestCount} | 内存: ${memMB}/${memMaxMB} MB`;
+    log(heartbeatLog);
+    requestLogs.push(heartbeatLog);
+  }
+
+  // 立即打印一次心跳
+  printHeartbeat();
+
+  // 定期打印心跳
+  setInterval(() => {
+    printHeartbeat();
+  }, HEARTBEAT_INTERVAL);
 });

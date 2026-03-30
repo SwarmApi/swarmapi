@@ -33,11 +33,20 @@
 
 ## 标准工作流程
 
-### 开发阶段
+### 简化流程（仅代码逻辑更新，不涉及热更新或依赖）
 ```bash
-cd d:/code/claws/swarm-worker
-# 修改 src/*.js、package.json 等
-# 本地测试：node src/index.js 
+# 1. 修改代码（src/index.js 等）
+# 2. 本地测试
+node src/index.js
+
+# 3. 打包 bin
+npm run build --registry https://registry.npmmirror.com
+
+# 4. 更新版本（versions.json）
+# 5. Git 提交推送
+git add . && git commit -m "update" && git push origin master
+
+# 注意：无需重新构建 Docker 镜像，除非涉及热更新脚本或基础镜像
 ```
 
 ### 打包与发布
@@ -111,9 +120,106 @@ npm run build --registry https://registry.npmmirror.com
 | git clone/pull/push | 代理 | ✅ 是 |
 | docker pull | 代理 | ✅ 是 |
 | docker push | 代理 | ✅ 是 |
-| docker build | 取决于基础镜像 | ℹ️ 可能 |
+| docker build | 根据Dockerfile设置 | ℹ️ 见下文 |
 
-### 标准代理设置（仅 GitHub 和 Docker）
+### Docker Build 网络代理完全指南⭐
+
+**核心原理**：Docker Desktop 会自动配置系统代理（`http.docker.internal:3128`）。容器内的 `apt-get`、`curl` 等会继承这个代理。如果代理不可用，构建会失败。
+
+#### 三层代理配置
+
+| 层级 | 位置 | 例子 |
+|------|------|------|
+| **Docker Desktop** | 系统配置 | `http.docker.internal:3128`（自动）|
+| **BUILD ARG** | 命令行 | `--build-arg http_proxy=http://localhost:10808` |
+| **容器环境** | Dockerfile | `ENV http_proxy=""` |
+
+#### 推荐方案：禁用代理 + 国内源
+
+Dockerfile 内显式禁用代理，改用国内镜像源（更稳定）：
+
+```dockerfile
+FROM ubuntu:24.04
+
+# 禁用代理继承
+ENV http_proxy="" https_proxy="" HTTP_PROXY="" HTTPS_PROXY="" NO_PROXY=""
+
+# 替换为国内源（阿里源最稳定）
+RUN sed -i 's|http://archive.ubuntu.com|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || true
+
+# 添加重试机制（处理临时故障）
+RUN apt-get update && apt-get install -y ... \
+    || (sleep 5 && apt-get update && apt-get install -y --fix-missing ...)
+```
+
+#### 不同基础镜像的源替换方案
+
+根据基础镜像类型选择对应的方案：
+
+| 基础镜像 | 包管理器 | 源文件位置 | 替换命令 |
+|---------|---------|---------|---------|
+| `ubuntu:24.04` | apt | `/etc/apt/sources.list.d/*.sources` | `sed -i 's\|http://archive.ubuntu.com\|http://mirrors.aliyun.com\|g'` |
+| `debian:12` | apt | `/etc/apt/sources.list` | `sed -i 's\|http://deb.debian.org\|http://mirrors.aliyun.com\|g'` |
+| `alpine:latest` | apk | `/etc/apk/repositories` | `sed -i 's\|dl-cdn.alpinelinux.org\|mirrors.aliyun.com\|g'` |
+| `centos:7` | yum | `/etc/yum.repos.d/` | `sed -i 's\|mirror.centos.org\|mirrors.aliyun.com\|g'` |
+| `python:3.11` | apt | `/etc/apt/sources.list.d/` | `sed -i 's\|http://archive.ubuntu.com\|http://mirrors.aliyun.com\|g'` |
+| `node:20` | apt | `/etc/apt/sources.list.d/` | `sed -i 's\|http://archive.ubuntu.com\|http://mirrors.aliyun.com\|g'` |
+
+**快速参考（复制即用）**：
+
+```dockerfile
+# ===== Ubuntu/Debian/Python/Node =====
+FROM ubuntu:24.04
+ENV http_proxy="" https_proxy="" HTTP_PROXY="" HTTPS_PROXY="" NO_PROXY=""
+RUN sed -i 's|http://archive.ubuntu.com|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true
+RUN apt-get update && apt-get install -y ...
+
+# ===== Alpine =====
+FROM alpine:latest
+ENV http_proxy="" https_proxy="" HTTP_PROXY="" HTTPS_PROXY="" NO_PROXY=""
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories
+RUN apk update && apk add ...
+
+# ===== CentOS =====
+FROM centos:7
+ENV http_proxy="" https_proxy="" HTTP_PROXY="" HTTPS_PROXY="" NO_PROXY=""
+RUN sed -i 's|mirror.centos.org|mirrors.aliyun.com|g' /etc/yum.repos.d/*.repo
+RUN yum update && yum install -y ...
+```
+
+**推荐做法（自动选择）**：
+
+```dockerfile
+FROM ubuntu:24.04
+
+ENV http_proxy="" https_proxy="" HTTP_PROXY="" HTTPS_PROXY="" NO_PROXY=""
+
+# 自动检测并配置源
+RUN if [ -f /etc/apt/sources.list.d/*.sources ]; then \
+      sed -i 's|http://archive.ubuntu.com|http://mirrors.aliyun.com|g' /etc/apt/sources.list.d/*.sources 2>/dev/null || true; \
+    elif [ -f /etc/apt/sources.list ]; then \
+      sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/sources.list; \
+    elif [ -f /etc/apk/repositories ]; then \
+      sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories; \
+    fi
+
+RUN apt-get update && apt-get install -y ... || apk update && apk add ...
+```
+
+#### 调试命令
+
+```bash
+# 查看 Docker 当前代理配置
+docker info | findstr -i proxy
+
+# 查看容器内代理设置
+docker run --rm ubuntu:24.04 env | findstr -i proxy
+
+# 测试容器网连通性
+docker run --rm ubuntu curl -I http://mirrors.aliyun.com
+```
+
+#### 标准代理设置（如需使用本地代理）
 
 ```bash
 # Windows PowerShell - 仅在需要时设置
@@ -123,7 +229,7 @@ set HTTPS_PROXY=http://127.0.0.1:10808
 # Git 操作（如果需要访问 GitHub）
 set HTTP_PROXY=http://127.0.0.1:10808 && set HTTPS_PROXY=http://127.0.0.1:10808 && git push origin master
 
-# Docker 命令（如果需要访问 Docker Hub）
+# Docker 推送（需要代理连接 Docker Hub）
 set HTTP_PROXY=http://127.0.0.1:10808 && set HTTPS_PROXY=http://127.0.0.1:10808 && docker push swarmapi/swarm-worker:latest
 ```
 
@@ -135,8 +241,12 @@ cd d:/code/claws/swarm-worker
 npm install --registry https://registry.npmmirror.com
 npm run build --registry https://registry.npmmirror.com
 
-# ✅ Docker 构建 - pkg从淘宝源下载，基础镜像从Docker pull（需要代理）
-set HTTP_PROXY=http://127.0.0.1:10808 && set HTTPS_PROXY=http://127.0.0.1:10808 && docker build --network host -t swarmapi/swarm-worker:latest .
+# ✅ Docker 构建 - 无需代理（已在Dockerfile禁用）
+cd ../swarmapi
+docker build -t swarmapi/swarm-worker:latest .
+
+# 或者强制使用旧版 builder（如果buildKit出现问题）
+$env:DOCKER_BUILDKIT=0; docker build -t swarmapi/swarm-worker:latest .
 
 # ✅ Docker 推送 - 需要代理
 set HTTP_PROXY=http://127.0.0.1:10808 && set HTTPS_PROXY=http://127.0.0.1:10808 && docker push swarmapi/swarm-worker:latest
