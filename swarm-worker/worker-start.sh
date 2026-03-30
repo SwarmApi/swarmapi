@@ -1,18 +1,14 @@
-#!/bin/bash
+#!/bin/sh
 
 WORKER_PATH="${WORKER_PATH:-/app/worker}"
-UPDATE_URL="${UPDATE_URL:-https://raw.githubusercontent.com/SwarmApi/swarmapi/master/swarmapi/versions.json}"
-WORKER_BASE="https://raw.githubusercontent.com/SwarmApi/swarmapi/master/swarmapi"
+UPDATE_URL="${UPDATE_URL:-https://raw.githubusercontent.com/SwarmApi/swarmapi/master/versions.json}"
+WORKER_BASE="https://raw.githubusercontent.com/SwarmApi/swarmapi/master"
 GIT_PROXY="${GIT_PROXY:-}"
 
 echo "🌐 检查 Worker 更新..."
 
 fetch_version() {
-    if [ -n "$GIT_PROXY" ]; then
-        curl -s --proxy "$GIT_PROXY" --max-time 10 "$UPDATE_URL" 2>/dev/null || echo '{"version":"0.0.0"}'
-    else
-        curl -s --max-time 10 "$UPDATE_URL" 2>/dev/null || echo '{"version":"0.0.0"}'
-    fi
+    wget -O - "$UPDATE_URL" || echo '{"version":"0.0.0"}'
 }
 
 get_version() {
@@ -22,21 +18,12 @@ get_version() {
 download_worker() {
     local url="$1"
     echo "⬇️ 下载 Worker: $url"
-    if [ -n "$GIT_PROXY" ]; then
-      curl -s --proxy "$GIT_PROXY" --max-time 60 -o "$WORKER_PATH.new" "$url" && {
+    wget -q -O "$WORKER_PATH.new" "$url" && {
         chmod +x "$WORKER_PATH.new"
         mv -f "$WORKER_PATH.new" "$WORKER_PATH"
         echo "✅ 下载完成"
         return 0
-      }
-    else
-      curl -s --max-time 60 -o "$WORKER_PATH.new" "$url" && {
-        chmod +x "$WORKER_PATH.new"
-        mv -f "$WORKER_PATH.new" "$WORKER_PATH"
-        echo "✅ 下载完成"
-        return 0
-      }
-    fi
+    }
 
     rm -f "$WORKER_PATH.new"
     echo "❌ 下载失败"

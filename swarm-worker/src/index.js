@@ -4,7 +4,7 @@ const os = require('os');
 const { URL } = require('url');
 
 const PORT = process.env.PORT || 44444;
-const UPDATE_URL = process.env.UPDATE_URL || 'https://raw.githubusercontent.com/SwarmApi/swarmapi/master/swarmapi/versions.json';
+const UPDATE_URL = process.env.UPDATE_URL || 'https://raw.githubusercontent.com/SwarmApi/swarmapi/master/versions.json';
 
 let currentVersion = process.env.WORKER_VERSION || '0.0.0';
 let requestLogs = [];
@@ -122,7 +122,7 @@ const workerHTML = `
 </html>
 `;
 
-function route(req, res) {
+async function route(req, res) {
   const pathname = new URL(req.url, `http://${req.headers.host}`).pathname;
   const method = req.method;
   
