@@ -12,8 +12,11 @@ const UPDATE_MODE = process.env.UPDATE_MODE || 'periodic';
 
 let currentVersion = process.env.WORKER_VERSION || '0.0.0';
 
-console.log(`🐝 Worker 启动 - 版本: ${currentVersion}, 模式: ${UPDATE_MODE}`);
-console.log(`📝 环境变量: WORKER_VERSION=${process.env.WORKER_VERSION || '(未设置)'}, UPDATE_MODE=${UPDATE_MODE}`);
+const log = (...args) => console.log(new Date().toISOString().slice(0,19).replace('T',' '), ...args);
+const logRaw = log;
+
+log(`🐝 Worker 启动 - 版本: ${currentVersion}, 模式: ${UPDATE_MODE}`);
+log(`📝 环境变量: WORKER_VERSION=${process.env.WORKER_VERSION || '(未设置)'}, UPDATE_MODE=${UPDATE_MODE}`);
 let requestLogs = [];
 let requestCount = 0;
 let startTime = Date.now();
@@ -56,12 +59,12 @@ async function fetchVersions() {
     const data = await httpGet(UPDATE_URL);
     const trimmed = data.trim();
     if (!trimmed.startsWith('{')) {
-      console.log('检查更新失败: 返回内容不是JSON:', trimmed.substring(0, 100));
+      log('检查更新失败: 返回内容不是JSON:', trimmed.substring(0, 100));
       return null;
     }
     return JSON.parse(trimmed);
   } catch (e) {
-    console.log('检查更新失败:', e.message);
+    log('检查更新失败:', e.message);
     return null;
   }
 }
@@ -137,10 +140,10 @@ async function checkUpdate() {
   if (!meta) return;
 
   if (meta.version && meta.version !== currentVersion) {
-    console.log(`🔄 发现新版本: ${currentVersion} → ${meta.version}`);
+    log(`🔄 发现新版本: ${currentVersion} → ${meta.version}`);
     await forceUpdate();
   } else {
-    console.log(`✅ 当前已是最新版本: ${currentVersion}`);
+    log(`✅ 当前已是最新版本: ${currentVersion}`);
   }
 }
 
@@ -159,20 +162,20 @@ async function forceUpdate() {
     const workerUrl = meta.worker_url || meta.url || 'worker';
     const startUrl = meta.worker_start_url || WORKER_BASE + '/worker-start.sh';
 
-    console.log(`⬇️ 正在下载新版本: ${meta.version} (${workerUrl})`);
+    log(`⬇️ 正在下载新版本: ${meta.version} (${workerUrl})`);
     await downloadWorker(workerUrl);
 
-    console.log(`⬇️ 正在下载最新 worker-start.sh: ${startUrl}`);
+    log(`⬇️ 正在下载最新 worker-start.sh: ${startUrl}`);
     try {
       await downloadScript(startUrl, WORKER_START_PATH);
     } catch (err) {
-      console.log('更新 worker-start.sh 失败:', err.message);
+      log('更新 worker-start.sh 失败:', err.message);
     }
 
     currentVersion = meta.version || currentVersion;
     process.env.WORKER_VERSION = currentVersion;
 
-    console.log(`🔄 正在重启...`);
+    log(`🔄 正在重启...`);
 
     setTimeout(() => {
       const workerBin = process.env.WORKER_PATH || process.execPath;
@@ -186,7 +189,7 @@ async function forceUpdate() {
 
     return `更新到 ${currentVersion} 成功，重启中...`;
   } catch (e) {
-    console.log('更新失败:', e.message);
+    log('更新失败:', e.message);
     return e.message;
   } finally {
     isUpdating = false;
@@ -194,7 +197,7 @@ async function forceUpdate() {
 }
 
 function startUpdater() {
-  console.log('🌡️ 热更新服务已启动');
+  log('🌡️ 热更新服务已启动');
   
   if (UPDATE_MODE === 'periodic') {
     // 定期检查由 worker-start.sh Shell 脚本层负责，Worker 进程只在启动时检查一次
@@ -345,13 +348,13 @@ async function route(req, res) {
   }
   
   if ((pathname === '/api/update' || pathname === '/api/worker/update') && method === 'POST') {
-    console.log(`🔔 收到 ${pathname} 调用，当前版本: ${currentVersion}`);
+    log(`🔔 收到 ${pathname} 调用，当前版本: ${currentVersion}`);
     try {
       const result = await forceUpdate();
-      console.log(`🔔 /api/update 完成，新版本: ${currentVersion}`);
+      log(`🔔 /api/update 完成，新版本: ${currentVersion}`);
       res.end(JSON.stringify({ success: true, version: currentVersion, message: result }));
     } catch (err) {
-      console.log(`🔔 /api/update 失败: ${err.message}`);
+      log(`🔔 /api/update 失败: ${err.message}`);
       res.end(JSON.stringify({ success: false, error: err.message }));
     }
     return;
@@ -395,14 +398,14 @@ async function route(req, res) {
 const server = http.createServer(route);
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🐝 Swarm Worker 运行中`);
-  console.log(`📍 本机IP: ${localIP}`);
-  console.log(`🌐 端口: ${PORT}`);
-  console.log(`📦 版本: ${currentVersion}`);
+  log(`🐝 Swarm Worker 运行中`);
+  log(`📍 本机IP: ${localIP}`);
+  log(`🌐 端口: ${PORT}`);
+  log(`📦 版本: ${currentVersion}`);
   
   try {
     startUpdater();
   } catch (err) {
-    console.log('热更新模块启动失败:', err.message);
+    log('热更新模块启动失败:', err.message);
   }
 });
