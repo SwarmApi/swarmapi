@@ -5,7 +5,7 @@ UPDATE_URL="${UPDATE_URL:-https://raw.githubusercontent.com/SwarmApi/swarmapi/ma
 WORKER_BASE="https://raw.githubusercontent.com/SwarmApi/swarmapi/master"
 WORKER_START_URL="${WORKER_START_URL:-https://raw.githubusercontent.com/SwarmApi/swarmapi/master/worker-start.sh}"
 WORKER_START_PATH="${WORKER_START_PATH:-/app/worker-start.sh}"
-UPDATE_MODE="${UPDATE_MODE:-periodic}"
+UPDATE_MODE="${UPDATE_MODE:-none}"
 CHECK_INTERVAL="${CHECK_INTERVAL:-3600}"
 
 # UPDATE_MODE:
