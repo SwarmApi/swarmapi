@@ -9,7 +9,7 @@ echo "📦 Installing pkg..."
 npm install -g pkg
 
 echo "🏗️ Packaging..."
-pkg src/index.js --targets node20-linux-x64,node20-win-x64 --output worker
+pkg src/index.js --targets node20-linux-x64 --output worker
 
 echo "✅ Build complete!"
 echo ""

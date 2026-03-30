@@ -4,7 +4,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/index.js",
-    "build": "pkg src/index.js --targets node16-linux-x64,node16-win-x64 --output worker"
+    "build": "pkg src/index.js --targets node16-linux-x64 --output worker"
   },
   "pkg": {
     "assets": [],
@@ -12,8 +12,7 @@
       "src/updater.js"
     ],
     "targets": [
-      "node16-linux-x64",
-      "node16-win-x64"
+      "node16-linux-x64"
     ]
   },
   "devDependencies": {
