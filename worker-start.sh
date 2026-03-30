@@ -66,10 +66,30 @@ download_worker() {
     log "⬇️ 下载 Worker: $url"
     [ -d "$(dirname "$WORKER_PATH")" ] || mkdir -p "$(dirname "$WORKER_PATH")"
 
-    if wget -q -O "$WORKER_PATH.new" "$url"; then
-        chmod +x "$WORKER_PATH.new"
-        mv -f "$WORKER_PATH.new" "$WORKER_PATH"
-        log "✅ 下载完成"
+    if node -e "
+    const https = require('https');
+    const fs = require('fs');
+    const url = '$url';
+    const file = fs.createWriteStream('$WORKER_PATH.new');
+    https.get(url, (res) => {
+      if (res.statusCode !== 200) {
+        file.close();
+        fs.unlinkSync('$WORKER_PATH.new');
+        process.exit(1);
+      }
+      res.pipe(file);
+      file.on('finish', () => {
+        file.close();
+        require('fs').chmodSync('$WORKER_PATH.new', 0o755);
+        require('fs').renameSync('$WORKER_PATH.new', '$WORKER_PATH');
+        console.log('✅ 下载完成');
+      });
+    }).on('error', (err) => {
+      file.close();
+      try { require('fs').unlinkSync('$WORKER_PATH.new'); } catch(e) {}
+      process.exit(1);
+    });
+    "; then
         return 0
     fi
 
