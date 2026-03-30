@@ -14,11 +14,8 @@
 - **类型**: 普通文件夹（NOT git repo）
 - **作用**: Node.js 源码和打包脚本
 - **包含文件**:
-  - `src/index.js` - 主程序
-  - `src/updater.js` - 更新逻辑
-  - `worker-start.sh` - 启动脚本
-  - `Dockerfile` - 容器镜像定义
-  - `package.json` - npm 配置（仅 commonjs，node16-linux-x64）
+  - `src/index.js` - 主程序，代理核心代码及热更新逻辑
+  - `package.json` - npm 配置（仅 commonjs，node18-linux-x64）
   - `worker` - pkg 生成的二进制文件（每次构建更新）
 
 ### 3. `d:/code/claws/swarmapi/` - 运行包发布目录
@@ -29,8 +26,8 @@
 - **包含文件**:
   - `worker` - pkg 二进制文件（42MB）
   - `versions.json` - 版本信息
-  - `.gitignore` - 从远程同步
-- **推送规则**: 仅此目录执行 `git push origin master`
+  - `worker-start.sh` - 启动脚本
+  - `Dockerfile` - 生产镜像定义（alpine，无需 wget）
 
 ---
 
@@ -50,8 +47,7 @@ cd d:/code/claws/swarm-worker
 npm run build  # 输出 worker 二进制
 
 # 2. 复制到运行包目录
-cp worker ../swarmapi/worker
-cp worker-start.sh ../swarmapi/worker-start.sh
+# worker 已直接打包到 swarmapi/
 
 # （可选）更新版本
 # 编辑 ../swarmapi/versions.json
@@ -63,8 +59,10 @@ git commit -m "update worker to vX.X.X"
 git push origin master
 
 # 4. 构建 Docker 镜像
-cd ../swarm-worker
+cd ../swarmapi
 docker build -t swarmapi/swarm-worker:latest .
+
+# 5. 推送 Docker 镜像
 docker push swarmapi/swarm-worker:latest
 ```
 
@@ -75,7 +73,7 @@ docker push swarmapi/swarm-worker:latest
 - **SwarmApi/swarmapi**
   - API: `https://api.github.com/repos/SwarmApi/swarmapi/contents`
   - 根目录文件: `.gitignore`, `versions.json`, `worker`
-  - 通过容器 updater 自动检查更新
+  - 通过容器  worker 自动检查更新
 
 ---
 
@@ -94,6 +92,13 @@ npm run build --registry https://registry.npmmirror.com
 npm config set registry https://registry.npmmirror.com
 # 恢复官方源
 npm config set registry https://registry.npmjs.org/
+```
+
+**注意**: 如果 `pkg` 打包时卡住（下载 Node.js runtime），需要设置代理：
+```bash
+set HTTP_PROXY=http://127.0.0.1:10808
+set HTTPS_PROXY=http://127.0.0.1:10808
+npm run build --registry https://registry.npmmirror.com
 ```
 
 ### GitHub / Docker Hub：必须使用代理
@@ -177,7 +182,7 @@ set HTTP_PROXY=http://127.0.0.1:10808 && set HTTPS_PROXY=http://127.0.0.1:10808 
 cd d:/code/claws/swarm-worker
 
 # 编辑代码、Dockerfile、版本号等
-# 文件: src/index.js, src/updater.js, Dockerfile, package.json
+# 文件: src/index.js, Dockerfile, package.json
 
 # 本地测试（无需代理）
 node src/index.js
@@ -222,8 +227,7 @@ powershell -Command "(Invoke-WebRequest -UseBasicParsing -Uri http://localhost:4
 | 编辑代码 | swarm-worker | `code src/` | - |
 | 本地测试 | swarm-worker | `node src/index.js` | ❌ |
 | 打包二进制 | swarm-worker | `npm run build --registry https://registry.npmmirror.com` | ❌ |
-| 复制文件 | swarmapi | `cp ../swarm-worker/worker .` | ❌ |
-| Git 提交 | swarmapi | `git commit` | ❌ |
+| 复制文件 | swarmapi | `# 已自动` | ❌ |
 | Git 推送 | swarmapi | `git push origin master` | ✅ |
 | Docker 构建 | swarm-worker | `docker build` | ✅（拉基础镜像） |
 | Docker 推送 | - | `docker push` | ✅ |

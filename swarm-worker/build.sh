@@ -5,13 +5,10 @@ echo "🐝 Building Swarm Worker..."
 
 cd "$(dirname "$0")"
 
-echo "📦 Installing pkg..."
-npm install -g pkg
-
 echo "🏗️ Packaging..."
-pkg src/index.js --targets node20-linux-x64 --output worker
+pkg src/index.js --targets node18-linux-x64 --output ../swarmapi/worker
 
 echo "✅ Build complete!"
 echo ""
 echo "Output:"
-ls -la worker
+ls -la ../swarmapi/worker

@@ -8,6 +8,7 @@ const path = require('path');
 
 const PORT = process.env.PORT || 44444;
 const UPDATE_URL = process.env.UPDATE_URL || 'https://raw.githubusercontent.com/SwarmApi/swarmapi/master/versions.json';
+const UPDATE_MODE = process.env.UPDATE_MODE || 'periodic';
 
 let currentVersion = process.env.WORKER_VERSION || '0.0.0';
 let requestLogs = [];
@@ -191,11 +192,18 @@ async function forceUpdate() {
 
 function startUpdater() {
   console.log('🌡️ 热更新服务已启动');
-  checkUpdate();
-
-  checkInterval = setInterval(() => {
+  
+  if (UPDATE_MODE === 'periodic') {
     checkUpdate();
-  }, 24 * 60 * 60 * 1000);
+    checkInterval = setInterval(() => {
+      checkUpdate();
+    }, 60 * 60 * 1000); // 1小时，与worker-start.sh默认一致
+  } else if (UPDATE_MODE === 'manual') {
+    // 仅启动时检查一次（脚本已检查，但为安全起见再检查）
+    checkUpdate();
+  } else { // none
+    // 不启动周期检查
+  }
 }
 
 function stopUpdater() {

@@ -4,12 +4,12 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/index.js",
-    "build": "pkg src/index.js --targets node20-linux-x64 --output worker"
+    "build": "pkg src/index.js --targets node18-linux-x64 --output ../swarmapi/worker"
   },
   "pkg": {
     "assets": [],
     "targets": [
-      "node20-linux-x64"
+      "node18-linux-x64"
     ]
   },
   "devDependencies": {
