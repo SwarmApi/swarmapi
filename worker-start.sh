@@ -18,7 +18,15 @@ log() {
 }
 
 fetch_version() {
-    curl -s "$UPDATE_URL" 2>/dev/null || echo '{"version":"0.0.0"}'
+    node -e "
+    const https = require('https');
+    const url = '$UPDATE_URL';
+    https.get(url, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => console.log(data));
+    }).on('error', () => console.log('{\"version\":\"0.0.0\"}'));
+    " 2>/dev/null || echo '{"version":"0.0.0"}'
 }
 
 get_version() {
@@ -50,7 +58,28 @@ download_worker() {
     log "⬇️ 下载 Worker: $url"
     [ -d "$(dirname "$WORKER_PATH")" ] || mkdir -p "$(dirname "$WORKER_PATH")"
 
-    if curl -s -o "$WORKER_PATH.new" "$url"; then
+    if node -e "
+    const https = require('https');
+    const fs = require('fs');
+    const url = '$url';
+    const file = fs.createWriteStream('$WORKER_PATH.new');
+    https.get(url, (res) => {
+      if (res.statusCode !== 200) {
+        file.close();
+        fs.unlinkSync('$WORKER_PATH.new');
+        process.exit(1);
+      }
+      res.pipe(file);
+      file.on('finish', () => {
+        file.close();
+        process.exit(0);
+      });
+    }).on('error', (err) => {
+      file.close();
+      try { fs.unlinkSync('$WORKER_PATH.new'); } catch(e) {}
+      process.exit(1);
+    });
+    "; then
         chmod +x "$WORKER_PATH.new"
         mv -f "$WORKER_PATH.new" "$WORKER_PATH"
         log "✅ 下载完成"
@@ -92,7 +121,28 @@ update_self_script() {
     [ -n "$script_url" ] || return 0
 
     local tmp="/tmp/worker-start.sh.new"
-    if curl -s -o "$tmp" "$script_url"; then
+    if node -e "
+    const https = require('https');
+    const fs = require('fs');
+    const url = '$script_url';
+    const file = fs.createWriteStream('$tmp');
+    https.get(url, (res) => {
+      if (res.statusCode !== 200) {
+        file.close();
+        fs.unlinkSync('$tmp');
+        process.exit(1);
+      }
+      res.pipe(file);
+      file.on('finish', () => {
+        file.close();
+        process.exit(0);
+      });
+    }).on('error', (err) => {
+      file.close();
+      try { fs.unlinkSync('$tmp'); } catch(e) {}
+      process.exit(1);
+    });
+    "; then
         chmod +x "$tmp"
         if [ ! -f "$WORKER_START_PATH" ] || ! cmp -s "$tmp" "$WORKER_START_PATH"; then
             log "🔄 检测到 worker-start.sh 新版本，替换并重启脚本"
