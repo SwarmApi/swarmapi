@@ -9,6 +9,21 @@ const crypto = require('crypto');
 const PORT = process.env.PORT || 44444;
 const DATA_DIR = path.join(__dirname, 'data');
 
+const FREE_MODELS = [
+  { id: 'big-pickle', name: 'Big Pickle' },
+  { id: 'gpt-5-nano', name: 'GPT-5 Nano' },
+  { id: 'minimax-m2.5-free', name: 'MiniMax M2.5 Free' },
+  { id: 'minimax-m2.1-free', name: 'MiniMax M2.1 Free' },
+  { id: 'kimi-k2.5-free', name: 'Kimi K2.5 Free' },
+  { id: 'glm-4.7-free', name: 'GLM-4.7 Free' },
+  { id: 'glm-5-free', name: 'GLM-5 Free' },
+  { id: 'trinity-large-preview-free', name: 'Trinity Large Preview' },
+  { id: 'nemotron-3-super-free', name: 'Nemotron 3 Super Free' },
+  { id: 'mimo-v2-flash-free', name: 'Mimo V2 Flash Free' },
+];
+
+const DEFAULT_FREE_MODEL = 'big-pickle';
+
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
@@ -90,6 +105,21 @@ function loadAdmin() {
 
 function saveAdmin(adminData) {
   fs.writeFileSync(path.join(DATA_DIR, 'admin.json'), JSON.stringify(adminData, null, 2));
+}
+
+let config = loadConfig();
+
+function loadConfig() {
+  const file = path.join(DATA_DIR, 'config.json');
+  try {
+    return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : { defaultModel: DEFAULT_FREE_MODEL };
+  } catch {
+    return { defaultModel: DEFAULT_FREE_MODEL };
+  }
+}
+
+function saveConfig() {
+  fs.writeFileSync(path.join(DATA_DIR, 'config.json'), JSON.stringify(config, null, 2));
 }
 
 function verifySession(sessionId) {
@@ -290,13 +320,19 @@ const adminHTML = (nodes, accounts) => `<!DOCTYPE html>
     
     <div id="tab-workers" class="tab-content active">
       <div class="card">
-        <h3>添加Worker</h3>
-        <input type="text" id="newUrl" placeholder="https://xxx.clawcloudrun.com">
-        <input type="text" id="containerRegion" placeholder="大区 (e.g., ap-southeast-1)">
-        <input type="text" id="containerLocation" placeholder="位置 (e.g., Singapore)">
-        <select id="accountSelect"><option value="">选择账户</option>${accounts.map(a => '<option value="' + a.id + '">' + (a.label || a.username) + '</option>').join('')}</select>
-        <button onclick="addNode()">➕ 添加</button>
-        <button class="secondary" onclick="testAll()">🧪 测试</button>
+        <button class="secondary" onclick="toggleNodeForm()" style="margin-bottom:15px">➕ 添加Worker</button>
+        <div id="nodeFormContainer" style="display:none; padding:15px; background:rgba(0,0,0,0.2); border-radius:8px; margin-bottom:15px">
+          <h4 style="color:#00d4ff; margin-bottom:10px">新增Worker</h4>
+          <input type="text" id="newUrl" placeholder="https://xxx.clawcloudrun.com">
+          <select id="accountSelect"><option value="">选择账户</option>${accounts.map(a => '<option value="' + a.id + '">' + a.username + (a.email ? ' (' + a.email + ')' : '') + '</option>').join('')}</select>
+          <select id="modelSelect"><option value="">选择模型（默认使用全局设置）</option>${FREE_MODELS.map(m => '<option value="' + m.id + '">' + m.name + ' (' + m.id + ')</option>').join('')}</select>
+          <input type="text" id="containerRegion" placeholder="大区 (e.g., ap-southeast-1)">
+          <input type="text" id="containerLocation" placeholder="位置 (e.g., Singapore)">
+          <button onclick="saveNode()" style="margin-right:10px">✅ 保存</button>
+          <button class="secondary" onclick="toggleNodeForm()">❌ 取消</button>
+        </div>
+        <button class="secondary" onclick="testAll()" style="margin-bottom:15px">🧪 测试全部</button>
+        <button class="secondary" onclick="updateAllNodes()" style="margin-bottom:15px">🔄 更新全部</button>
       </div>
       <div class="card" id="nodeList"></div>
     </div>
@@ -342,6 +378,12 @@ const adminHTML = (nodes, accounts) => `<!DOCTYPE html>
   <script>
     let nodeList = ${JSON.stringify(nodes)};
     let accountList = ${JSON.stringify(accounts)};
+    const FREE_MODELS = ${JSON.stringify(FREE_MODELS)};
+    const DEFAULT_FREE_MODEL = '${DEFAULT_FREE_MODEL}';
+    let config = { defaultModel: DEFAULT_FREE_MODEL };
+    
+    // 加载配置
+    fetch('/api/config').then(r => r.json()).then(d => { config = d.config; });
     
     function showTab(tab) {
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -350,15 +392,40 @@ const adminHTML = (nodes, accounts) => `<!DOCTYPE html>
       event.target.classList.add('active');
     }
     
+    function toggleNodeForm() {
+      document.getElementById('nodeFormContainer').style.display = 
+        document.getElementById('nodeFormContainer').style.display === 'none' ? 'block' : 'none';
+    }
+    
     function updateNodeList() {
       document.getElementById('nodeCount').textContent = nodeList.length;
       let html = '';
       if (nodeList.length === 0) {
         html = '<p style="color:#888">暂无Workers</p>';
       } else {
-        html = nodeList.map((n, i) => 
-          '<div class="item"><div style="flex:1"><div style="color:#0f0">' + n.url + '</div><div style="color:#888;font-size:12px">' + (n.containerRegion || '-') + ' / ' + (n.containerLocation || '-') + '</div></div><div style="text-align:right"><button class="small danger" onclick="deleteNode(' + i + ')">删除</button></div></div>'
-        ).join('');
+        // 表头
+        html += '<div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 0.5fr 1.5fr; gap:8px; padding:10px; background:rgba(0,255,0,0.1); border-radius:6px; margin-bottom:8px; font-weight:bold; font-size:12px; align-items:center"><div>URL</div><div>账户</div><div>模型</div><div>地区</div><div>位置</div><div>状态</div><div>权重</div><div>成功率</div><div>测试</div><div>操作</div></div>';
+        
+        // Worker行
+        html += nodeList.map((n, i) => {
+          const successRate = n.totalRequests > 0 ? Math.round(n.successRequests / n.totalRequests * 100) : 0;
+          const statusColor = n.status === '正常' ? '#00ff00' : n.status === '失败' ? '#ff4444' : '#888';
+          const account = accountList.find(a => a.id === n.accountId);
+          const accountDisplay = account ? (account.username || '-') : '-';
+          const modelDisplay = n.model || '-';
+          return '<div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 0.5fr 1.5fr; gap:8px; padding:10px; background:rgba(0,0,0,0.3); border-radius:4px; align-items:center; border-left:3px solid #00d4ff; margin-bottom:4px">' +
+            '<div style="word-break:break-all; font-size:11px">' + n.url + '</div>' +
+            '<div style="font-size:11px; color:#0d9">' + accountDisplay + '</div>' +
+            '<div style="font-size:11px; color:#f0a">' + modelDisplay + '</div>' +
+            '<div style="font-size:12px; color:#888">' + (n.containerRegion || '-') + '</div>' +
+            '<div style="font-size:12px; color:#888">' + (n.containerLocation || '-') + '</div>' +
+            '<div style="font-size:12px; color:' + statusColor + '">' + (n.status || '-') + '</div>' +
+            '<div style="font-size:12px">' + (n.weight || 10) + '</div>' +
+            '<div style="font-size:12px; color:' + (successRate >= 80 ? '#00ff00' : successRate >= 50 ? '#ffaa00' : '#ff4444') + '">' + successRate + '%</div>' +
+            '<div style="display:flex; gap:2px"><button class="small" style="padding:2px 4px; font-size:10px" onclick="testNode(' + i + ')">🧪</button><button class="small" style="padding:2px 4px; font-size:10px" onclick="updateNode(' + i + ')">🔄</button></div>' +
+            '<div style="display:flex; gap:2px"><button class="small secondary" style="padding:2px 4px; font-size:10px" onclick="editNode(' + i + ')">✏️</button><button class="small danger" style="padding:2px 4px; font-size:10px" onclick="deleteNode(' + i + ')">🗑️</button></div>' +
+            '</div>';
+        }).join('');
       }
       document.getElementById('nodeList').innerHTML = '<h3>Worker列表</h3>' + html;
     }
@@ -441,7 +508,7 @@ html += sorted.map((a) => {
     copilotColor = '#ff4444';
   }
   
-  return '<div style="display:grid; grid-template-columns:1.5fr 1.5fr 1fr 1fr 1.2fr 0.8fr 1fr 1.5fr; gap:8px; padding:10px; background:rgba(0,0,0,0.3); border-radius:4px; align-items:center; border-left:3px solid #00d4ff">' +
+  return '<div style="display:grid; grid-template-columns:1fr 2fr 1fr 1fr 1.2fr 0.8fr 1fr 1.5fr; gap:8px; padding:10px; background:rgba(0,0,0,0.3); border-radius:4px; align-items:center; border-left:3px solid #00d4ff">' +
     '<div style="word-break:break-all; display:flex; align-items:center; gap:5px"><span style="color:#0d9">' + (a.username || '-') + '</span></div>' +
     '<div style="word-break:break-all; display:flex; align-items:center; gap:5px"><span style="color:#0d9">' + (a.email || '-') + '</span><button class="small" style="padding:2px 4px; font-size:10px" onclick="copyEmail(' + origIdx + ')" title="复制邮箱">📋</button></div>' +
     '<div style="display:flex; align-items:center; gap:4px"><span id="pwd' + origIdx + '" style="font-family:monospace; color:#00ff00; font-size:11px">***</span><button class="small" style="padding:2px 4px; font-size:10px" onclick="togglePassword(' + origIdx + ')">👁️</button><button class="small" style="padding:2px 4px; font-size:10px" onclick="copyPassword(' + origIdx + ')">📋</button></div>' +
@@ -522,32 +589,133 @@ function editAccount(i) {
   editingAccountIndex = i;
 }
     
-    async function addNode() {
+    let editingNodeIndex = null;
+    
+    function editNode(i) {
+      const n = nodeList[i];
+      document.getElementById('nodeFormContainer').style.display = 'block';
+      document.getElementById('newUrl').value = n.url || '';
+      document.getElementById('containerRegion').value = n.containerRegion || '';
+      document.getElementById('containerLocation').value = n.containerLocation || '';
+      document.getElementById('accountSelect').value = n.accountId || '';
+      document.getElementById('modelSelect').value = n.model || '';
+      editingNodeIndex = i;
+    }
+    
+    async function saveNode() {
       const url = document.getElementById('newUrl').value.trim();
-      if (!url) return;
-      const res = await fetch('/api/nodes', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ 
-          url, 
-          accountId: document.getElementById('accountSelect').value,
-          containerRegion: document.getElementById('containerRegion').value,
-          containerLocation: document.getElementById('containerLocation').value
-        })
-      });
-      nodeList = (await res.json()).nodes;
+      const accountId = document.getElementById('accountSelect').value;
+      const model = document.getElementById('modelSelect').value;
+      const containerRegion = document.getElementById('containerRegion').value;
+      const containerLocation = document.getElementById('containerLocation').value;
+      
+      if (!url) {
+        alert('请输入URL');
+        return;
+      }
+      
+      if (editingNodeIndex !== null) {
+        // 编辑模式
+        const res = await fetch('/api/nodes/' + editingNodeIndex + '/edit', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            url,
+            accountId,
+            model,
+            containerRegion,
+            containerLocation
+          })
+        });
+        nodeList = (await res.json()).nodes;
+      } else {
+        // 新增模式
+        const res = await fetch('/api/nodes', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            url,
+            accountId,
+            model,
+            containerRegion,
+            containerLocation
+          })
+        });
+        nodeList = (await res.json()).nodes;
+      }
+      
+      // 清空表单
       document.getElementById('newUrl').value = '';
+      document.getElementById('containerRegion').value = '';
+      document.getElementById('containerLocation').value = '';
+      document.getElementById('modelSelect').value = '';
+      document.getElementById('accountSelect').value = '';
+      document.getElementById('nodeFormContainer').style.display = 'none';
+      editingNodeIndex = null;
       updateNodeList();
     }
     
     async function deleteNode(i) {
-      nodeList = (await fetch('/api/nodes/' + i, { method: 'DELETE' })).json().nodes;
+      nodeList = (await (await fetch('/api/nodes/' + i, { method: 'DELETE' })).json()).nodes;
       updateNodeList();
     }
     
     async function testAll() {
-      nodeList = (await fetch('/api/nodes/test', { method: 'POST' })).json().nodes;
+      nodeList = (await (await fetch('/api/nodes/test', { method: 'POST' })).json()).nodes;
       updateNodeList();
+    }
+    
+    async function testNode(i) {
+      const node = nodeList[i];
+      try {
+        const res = await fetch(node.url + '/api/info', { method: 'GET' });
+        if (res.ok) {
+          node.status = '✅ 在线';
+          node.weight = node.weight || 10;
+        } else {
+          node.status = '❌ 离线';
+          node.weight = 0;
+        }
+      } catch {
+        node.status = '❌ 离线';
+        node.weight = 0;
+      }
+      updateNodeList();
+    }
+    
+    async function updateNode(i) {
+      const node = nodeList[i];
+      if (!confirm('确认更新 Worker ' + node.url + '?')) return;
+      try {
+        const res = await fetch('/api/worker/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: node.url })
+        });
+        const data = await res.json();
+        alert(data.message || JSON.stringify(data));
+      } catch (e) {
+        alert('更新失败: ' + e.message);
+      }
+    }
+    
+    async function updateAllNodes() {
+      if (!confirm('确认更新所有 Workers?')) return;
+      let success = 0, fail = 0;
+      for (const node of nodeList) {
+        try {
+          const res = await fetch('/api/worker/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: node.url })
+          });
+          if (res.ok) success++;
+          else fail++;
+        } catch {
+          fail++;
+        }
+      }
+      alert('更新完成: 成功 ' + success + ', 失败 ' + fail);
     }
     
     async function saveAccount() {
@@ -801,6 +969,7 @@ function route(req, res) {
           accountLabel: data.accountLabel,
           containerRegion: data.containerRegion,
           containerLocation: data.containerLocation,
+          model: data.model || config.defaultModel || DEFAULT_FREE_MODEL,
           status: '未测试',
           weight: 10,
           totalRequests: 0,
@@ -827,6 +996,31 @@ function route(req, res) {
     }
     return res.end(JSON.stringify({ nodes }));
   }
+
+  if (pathname.startsWith('/api/nodes/') && pathname.endsWith('/edit') && method === 'POST') {
+    if (!verifySession(sessionId)) {
+      return res.end(JSON.stringify({ error: '未授权' }));
+    }
+    
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      const pathParts = pathname.split('/');
+      const i = parseInt(pathParts[3]);
+      const { url, accountId, containerRegion, containerLocation, model } = JSON.parse(body);
+      
+      if (!isNaN(i) && nodes[i]) {
+        if (url !== undefined) nodes[i].url = url;
+        if (accountId !== undefined) nodes[i].accountId = accountId;
+        if (containerRegion !== undefined) nodes[i].containerRegion = containerRegion;
+        if (containerLocation !== undefined) nodes[i].containerLocation = containerLocation;
+        if (model !== undefined) nodes[i].model = model;
+        saveNodes();
+      }
+      return res.end(JSON.stringify({ nodes }));
+    });
+    return;
+  }
   
   if (pathname === '/api/nodes/test' && method === 'POST') {
     testAllNodes().then(() => res.end(JSON.stringify({ nodes })));
@@ -848,6 +1042,33 @@ function route(req, res) {
       } catch (e) {
         res.end(JSON.stringify({ error: e.message }));
       }
+    });
+    return;
+  }
+
+  // Models API
+  if (pathname === '/api/models' && method === 'GET') {
+    return res.end(JSON.stringify({
+      models: FREE_MODELS,
+      defaultModel: config.defaultModel || DEFAULT_FREE_MODEL
+    }));
+  }
+
+  if (pathname === '/api/config' && method === 'GET') {
+    return res.end(JSON.stringify({ config }));
+  }
+
+  if (pathname === '/api/config' && method === 'POST') {
+    if (!verifySession(sessionId)) {
+      return res.end(JSON.stringify({ error: '未授权' }));
+    }
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      const newConfig = JSON.parse(body);
+      if (newConfig.defaultModel) config.defaultModel = newConfig.defaultModel;
+      saveConfig();
+      res.end(JSON.stringify({ success: true, config }));
     });
     return;
   }
@@ -1022,6 +1243,18 @@ function route(req, res) {
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
       const startTime = Date.now();
+      
+      // 处理模型：如果请求的是"free"，则使用worker配置的模型
+      let requestBody;
+      try {
+        requestBody = JSON.parse(body);
+        if (requestBody.model === 'free' || !requestBody.model) {
+          const modelToUse = target.model || config.defaultModel || DEFAULT_FREE_MODEL;
+          requestBody.model = modelToUse;
+          body = JSON.stringify(requestBody);
+        }
+      } catch {}
+      
       httpRequest(target.url + pathname, { body, headers: req.headers })
         .then(result => {
           const time = Date.now() - startTime;

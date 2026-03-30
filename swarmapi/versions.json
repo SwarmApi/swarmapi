@@ -1,5 +1,1 @@
-{
-  "version": "1.0.0",
-  "url": "https://raw.githubusercontent.com/SwarmApi/swarmapi/main/worker",
-  "updated": "2026-03-29T00:00:00Z"
-}
+﻿{"version":"1.0.1","worker_url":"https://raw.githubusercontent.com/SwarmApi/swarmapi/master/worker","worker_start_url":"https://raw.githubusercontent.com/SwarmApi/swarmapi/master/worker-start.sh","updated":"2026-03-30T12:56:46Z"}

@@ -1,0 +1,11 @@
+swarm-test/node_modules/
+swarm-queen/
+swarm-worker/
+swarm/
+swarmapi/Dockerfile
+swarmapi/proxy.js
+swarmapi/pool.json
+swarmapi/package.json
+swarmapi/.dockerignore
+swarmapi/README.md
+!.gitignore

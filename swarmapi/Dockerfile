@@ -1,33 +1,19 @@
-FROM node:20-alpine
+FROM node:20-bullseye-slim
 
-LABEL maintainer="SwarmApi"
-LABEL description="Swarm API Proxy with OpenCode"
+RUN apt-get update && apt-get install -y wget && rm -rf /var/lib/apt/lists/*
 
-# 安装系统工具
-RUN apk add --no-cache \
-    git \
-    curl \
-    bash \
-    jq
-
-# 安装OpenCode
-RUN npm install -g opencode
-
-# 克隆最新swarmapi
 WORKDIR /app
-RUN git clone https://github.com/SwarmApi/swarmapi.git . || git -C . pull
 
-# 创建非root用户
-RUN addgroup -g 1000 appgroup && \
-    adduser -u 1000 -G appgroup -s /bin/sh -D appuser
-
-USER appuser
+COPY src /app/src
+COPY worker /app/worker
+COPY worker-start.sh /app/worker-start.sh
 
 ENV PORT=44444
-ENV GITHUB_REPO=SwarmApi/swarmapi
-ENV NODE_ENV=production
+ENV WORKER_PATH=/app/worker
+ENV UPDATE_URL=https://raw.githubusercontent.com/SwarmApi/swarmapi/master/versions.json
+
+RUN chmod +x /app/worker-start.sh /app/worker
 
 EXPOSE 44444
 
-# 每小时自动更新
-CMD ["sh", "-c", "while true; do git -C /app pull; sleep 3600; done & node /app/proxy.js"]
+CMD ["/app/worker-start.sh"]
