@@ -7,6 +7,7 @@ WORKER_START_URL="${WORKER_START_URL:-https://raw.githubusercontent.com/SwarmApi
 WORKER_START_PATH="${WORKER_START_PATH:-/app/worker-start.sh}"
 UPDATE_MODE="${UPDATE_MODE:-periodic}"
 CHECK_INTERVAL="${CHECK_INTERVAL:-3600}"
+WORKER_VERSION="${WORKER_VERSION:-0.0.0}"
 
 # UPDATE_MODE:
 #  - periodic: 脚本启动后按 CHECK_INTERVAL 轮询远程版本（默认一天）
@@ -162,7 +163,7 @@ update_self_script() {
 
 # 首次或版本更新检查
 prepare_worker() {
-    local current="${WORKER_VERSION:-0.0.0}"
+    local current="$WORKER_VERSION"
     local latest
     local worker_url
     local start_url
