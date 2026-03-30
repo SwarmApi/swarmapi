@@ -21,10 +21,18 @@ fetch_version() {
     node -e "
     const https = require('https');
     const url = '$UPDATE_URL';
-    https.get(url, (res) => {
+    https.get(url, { headers: { 'User-Agent': 'worker-start.sh' } }, (res) => {
       let data = '';
+      res.setEncoding('utf8');
       res.on('data', (chunk) => data += chunk);
-      res.on('end', () => console.log(data));
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data.trim());
+          console.log(JSON.stringify(parsed));
+        } catch (e) {
+          console.log('{\"version\":\"0.0.0\"}');
+        }
+      });
     }).on('error', () => console.log('{\"version\":\"0.0.0\"}'));
     " 2>/dev/null || echo '{"version":"0.0.0"}'
 }
