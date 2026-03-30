@@ -66,7 +66,7 @@ download_worker() {
     log "⬇️ 下载 Worker: $url"
     [ -d "$(dirname "$WORKER_PATH")" ] || mkdir -p "$(dirname "$WORKER_PATH")"
 
-    if curl -s -o "$WORKER_PATH.new" "$url"; then
+    if wget -q -O "$WORKER_PATH.new" "$url"; then
         chmod +x "$WORKER_PATH.new"
         mv -f "$WORKER_PATH.new" "$WORKER_PATH"
         log "✅ 下载完成"
