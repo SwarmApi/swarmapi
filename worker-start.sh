@@ -66,12 +66,12 @@ download_worker() {
     log "⬇️ 下载 Worker: $url"
     [ -d "$(dirname "$WORKER_PATH")" ] || mkdir -p "$(dirname "$WORKER_PATH")"
 
-    if node -e "
+    if timeout 120 node -e "
     const https = require('https');
     const fs = require('fs');
     const url = '$url';
     const file = fs.createWriteStream('$WORKER_PATH.new');
-    https.get(url, (res) => {
+    const req = https.get(url, (res) => {
       if (res.statusCode !== 200) {
         file.close();
         fs.unlinkSync('$WORKER_PATH.new');
@@ -82,7 +82,14 @@ download_worker() {
         file.close();
         process.exit(0);
       });
-    }).on('error', (err) => {
+    });
+    req.on('error', (err) => {
+      file.close();
+      try { fs.unlinkSync('$WORKER_PATH.new'); } catch(e) {}
+      process.exit(1);
+    });
+    req.setTimeout(110000, () => {
+      req.abort();
       file.close();
       try { fs.unlinkSync('$WORKER_PATH.new'); } catch(e) {}
       process.exit(1);
