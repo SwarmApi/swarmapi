@@ -66,35 +66,7 @@ download_worker() {
     log "⬇️ 下载 Worker: $url"
     [ -d "$(dirname "$WORKER_PATH")" ] || mkdir -p "$(dirname "$WORKER_PATH")"
 
-    if timeout 120 node -e "
-    const https = require('https');
-    const fs = require('fs');
-    const url = '$url';
-    const file = fs.createWriteStream('$WORKER_PATH.new');
-    const req = https.get(url, (res) => {
-      if (res.statusCode !== 200) {
-        file.close();
-        fs.unlinkSync('$WORKER_PATH.new');
-        process.exit(1);
-      }
-      res.pipe(file);
-      file.on('finish', () => {
-        file.close();
-        process.exit(0);
-      });
-    });
-    req.on('error', (err) => {
-      file.close();
-      try { fs.unlinkSync('$WORKER_PATH.new'); } catch(e) {}
-      process.exit(1);
-    });
-    req.setTimeout(110000, () => {
-      req.abort();
-      file.close();
-      try { fs.unlinkSync('$WORKER_PATH.new'); } catch(e) {}
-      process.exit(1);
-    });
-    "; then
+    if wget -q -O "$WORKER_PATH.new" "$url" --timeout=120; then
         chmod +x "$WORKER_PATH.new"
         mv -f "$WORKER_PATH.new" "$WORKER_PATH"
         log "✅ 下载完成"
