@@ -1036,10 +1036,13 @@ function route(req, res) {
     req.on('data', chunk => body += chunk);
     req.on('end', async () => {
       const { url } = JSON.parse(body);
+      const workerUrl = url.replace(/\/$/, '') + '/api/update';
+      console.log('🔄 更新 Worker:', workerUrl);
       try {
-        const result = await httpRequest(url + '/api/update', { method: 'POST' });
+        const result = await httpRequest(workerUrl, { method: 'POST' });
         res.end(result.body);
       } catch (e) {
+        console.error('更新失败:', e.message);
         res.end(JSON.stringify({ error: e.message }));
       }
     });

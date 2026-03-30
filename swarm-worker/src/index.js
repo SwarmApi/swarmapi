@@ -11,6 +11,9 @@ const UPDATE_URL = process.env.UPDATE_URL || 'https://raw.githubusercontent.com/
 const UPDATE_MODE = process.env.UPDATE_MODE || 'periodic';
 
 let currentVersion = process.env.WORKER_VERSION || '0.0.0';
+
+console.log(`🐝 Worker 启动 - 版本: ${currentVersion}, 模式: ${UPDATE_MODE}`);
+console.log(`📝 环境变量: WORKER_VERSION=${process.env.WORKER_VERSION || '(未设置)'}, UPDATE_MODE=${UPDATE_MODE}`);
 let requestLogs = [];
 let requestCount = 0;
 let startTime = Date.now();
@@ -343,11 +346,14 @@ async function route(req, res) {
     }));
   }
   
-  if (pathname === '/api/update' && method === 'POST') {
+  if ((pathname === '/api/update' || pathname === '/api/worker/update') && method === 'POST') {
+    console.log(`🔔 收到 ${pathname} 调用，当前版本: ${currentVersion}`);
     try {
       const result = await forceUpdate();
+      console.log(`🔔 /api/update 完成，新版本: ${currentVersion}`);
       res.end(JSON.stringify({ success: true, version: currentVersion, message: result }));
     } catch (err) {
+      console.log(`🔔 /api/update 失败: ${err.message}`);
       res.end(JSON.stringify({ success: false, error: err.message }));
     }
     return;
