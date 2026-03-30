@@ -197,10 +197,8 @@ function startUpdater() {
   console.log('🌡️ 热更新服务已启动');
   
   if (UPDATE_MODE === 'periodic') {
+    // 定期检查由 worker-start.sh Shell 脚本层负责，Worker 进程只在启动时检查一次
     checkUpdate();
-    checkInterval = setInterval(() => {
-      checkUpdate();
-    }, 60 * 60 * 1000); // 1小时，与worker-start.sh默认一致
   } else if (UPDATE_MODE === 'manual') {
     // 仅启动时检查一次（脚本已检查，但为安全起见再检查）
     checkUpdate();
