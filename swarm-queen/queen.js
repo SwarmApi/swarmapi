@@ -446,37 +446,98 @@ const adminHTML = (nodes, accounts) => `<!DOCTYPE html>
         document.getElementById('nodeFormContainer').style.display === 'none' ? 'block' : 'none';
     }
     
+    function normalizeUrl(url) {
+      if (!url) return '';
+      return url.replace(/\/+$/, '');
+    }
+
     function updateNodeList() {
+      const container = document.getElementById('nodeList');
       document.getElementById('nodeCount').textContent = nodeList.length;
-      let html = '';
+      container.innerHTML = '<h3>Worker列表</h3>';
+
       if (nodeList.length === 0) {
-        html = '<p style="color:#888">暂无Workers</p>';
-      } else {
-        // 表头
-        html += '<div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 0.5fr 1.5fr; gap:8px; padding:10px; background:rgba(0,255,0,0.1); border-radius:6px; margin-bottom:8px; font-weight:bold; font-size:12px; align-items:center"><div>URL</div><div>账户</div><div>模型</div><div>地区</div><div>位置</div><div>状态</div><div>权重</div><div>成功率</div><div>测试</div><div>操作</div></div>';
-        
-        // Worker行
-        html += nodeList.map((n, i) => {
-          const successRate = n.totalRequests > 0 ? Math.round(n.successRequests / n.totalRequests * 100) : 0;
-          const statusColor = n.status === '正常' ? '#00ff00' : n.status === '失败' ? '#ff4444' : '#888';
-          const account = accountList.find(a => a.id === n.accountId);
-          const accountDisplay = account ? (account.username || '-') : '-';
-          const modelDisplay = n.model || '-';
-          return '<div style="display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 0.5fr 1.5fr; gap:8px; padding:10px; background:rgba(0,0,0,0.3); border-radius:4px; align-items:center; border-left:3px solid #00d4ff; margin-bottom:4px">' +
-            '<div style="word-break:break-all; font-size:11px">' + n.url + '</div>' +
-            '<div style="font-size:11px; color:#0d9">' + accountDisplay + '</div>' +
-            '<div style="font-size:11px; color:#f0a">' + modelDisplay + '</div>' +
-            '<div style="font-size:12px; color:#888">' + (n.containerRegion || '-') + '</div>' +
-            '<div style="font-size:12px; color:#888">' + (n.containerLocation || '-') + '</div>' +
-            '<div style="font-size:12px; color:' + statusColor + '">' + (n.status || '-') + '</div>' +
-            '<div style="font-size:12px">' + (n.weight || 10) + '</div>' +
-            '<div style="font-size:12px; color:' + (successRate >= 80 ? '#00ff00' : successRate >= 50 ? '#ffaa00' : '#ff4444') + '">' + successRate + '%</div>' +
-            '<div style="display:flex; gap:2px"><button class="small" style="padding:2px 4px; font-size:10px" onclick="testNode(' + i + ')">🧪</button><button class="small" style="padding:2px 4px; font-size:10px" onclick="updateNode(' + i + ')">🔄</button></div>' +
-            '<div style="display:flex; gap:2px"><button class="small secondary" style="padding:2px 4px; font-size:10px" onclick="editNode(' + i + ')">✏️</button><button class="small danger" style="padding:2px 4px; font-size:10px" onclick="deleteNode(' + i + ')">🗑️</button></div>' +
-            '</div>';
-        }).join('');
+        const empty = document.createElement('p');
+        empty.style.color = '#888';
+        empty.textContent = '暂无Workers';
+        container.appendChild(empty);
+        return;
       }
-      document.getElementById('nodeList').innerHTML = '<h3>Worker列表</h3>' + html;
+
+      const header = document.createElement('div');
+      header.style.cssText = 'display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 0.5fr 1.5fr; gap:8px; padding:10px; background:rgba(0,255,0,0.1); border-radius:6px; margin-bottom:8px; font-weight:bold; font-size:12px; align-items:center';
+      ['URL','账户','模型','地区','位置','状态','权重','成功率','测试','操作'].forEach(text => {
+        const col = document.createElement('div');
+        col.textContent = text;
+        header.appendChild(col);
+      });
+      container.appendChild(header);
+
+      nodeList.forEach((n, i) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 0.5fr 1.5fr; gap:8px; padding:10px; background:rgba(0,0,0,0.3); border-radius:4px; align-items:center; border-left:3px solid #00d4ff; margin-bottom:4px';
+
+        const successRate = n.totalRequests > 0 ? Math.round(n.successRequests / n.totalRequests * 100) : 0;
+        const statusColor = n.status === '正常' ? '#00ff00' : n.status === '失败' ? '#ff4444' : '#888';
+        const account = accountList.find(a => a.id === n.accountId);
+        const accountDisplay = account ? (account.username || '-') : '-';
+        const modelDisplay = n.model || '-';
+
+        const values = [
+          normalizeUrl(n.url),
+          accountDisplay,
+          modelDisplay,
+          n.containerRegion || '-',
+          n.containerLocation || '-',
+          n.status || '-',
+          n.weight || 10,
+          successRate + '%'
+        ];
+
+        values.forEach(v => {
+          const col = document.createElement('div');
+          col.style.fontSize = '12px';
+          if (v === (n.status || '-')) col.style.color = statusColor;
+          if (typeof v === 'string' && v.endsWith('%')) {
+            col.style.color = successRate >= 80 ? '#00ff00' : successRate >= 50 ? '#ffaa00' : '#ff4444';
+          }
+          col.textContent = v;
+          row.appendChild(col);
+        });
+
+        const testCol = document.createElement('div');
+        testCol.style.display = 'flex';
+        testCol.style.gap = '2px';
+        ['🧪','🔄'].forEach((icon, j) => {
+          const btn = document.createElement('button');
+          btn.className = 'small';
+          btn.style.cssText = 'padding:2px 4px; font-size:10px';
+          btn.textContent = icon;
+          if (icon === '🧪') btn.onclick = () => testNode(i);
+          else btn.onclick = () => updateNode(i);
+          testCol.appendChild(btn);
+        });
+        row.appendChild(testCol);
+
+        const opCol = document.createElement('div');
+        opCol.style.display = 'flex';
+        opCol.style.gap = '2px';
+        const editBtn = document.createElement('button');
+        editBtn.className = 'small secondary';
+        editBtn.style.cssText = 'padding:2px 4px; font-size:10px';
+        editBtn.textContent = '✏️';
+        editBtn.onclick = () => editNode(i);
+        const delBtn = document.createElement('button');
+        delBtn.className = 'small danger';
+        delBtn.style.cssText = 'padding:2px 4px; font-size:10px';
+        delBtn.textContent = '🗑️';
+        delBtn.onclick = () => deleteNode(i);
+        opCol.appendChild(editBtn);
+        opCol.appendChild(delBtn);
+        row.appendChild(opCol);
+
+        container.appendChild(row);
+      });
     }
      
     function toggleAddForm() {
@@ -1396,7 +1457,8 @@ function route(req, res) {
 
 // ========== 辅助函数 ==========
 function normalizeUrl(url) {
-  return url.replace(/\/+$/, ''); // 移除末尾的所有斜杠
+  if (!url) return '';
+  return url.replace(new RegExp("/+$", "g"), '');
 }
 
 async function testAllNodes() {
