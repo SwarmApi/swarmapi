@@ -20,6 +20,8 @@ const FREE_MODELS = [
   { id: 'trinity-large-preview-free', name: 'Trinity Large Preview' },
   { id: 'nemotron-3-super-free', name: 'Nemotron 3 Super Free' },
   { id: 'mimo-v2-flash-free', name: 'Mimo V2 Flash Free' },
+  { id: 'mimo-v2-pro-free', name: 'MiMo V2 Pro Free' },
+  { id: 'mimo-v2-omni-free', name: 'MiMo V2 Omni Free' },
 ];
 
 const DEFAULT_FREE_MODEL = 'big-pickle';
@@ -372,6 +374,12 @@ const adminHTML = (nodes, accounts) => `<!DOCTYPE html>
         <button onclick="changePassword()">修改</button>
         <div id="passwordResult" class="result"></div>
       </div>
+      <div class="card">
+        <h3>免费模型列表 (按行填写 ID，例如 minimax-m2.5-free)</h3>
+        <textarea id="freeModelsInput" style="width:100%; height:120px; background:#0a0a1a; color:#fff; border:1px solid #333; border-radius:6px; padding:10px"></textarea>
+        <button onclick="saveFreeModels()" style="margin-top:10px">保存免费模型</button>
+        <div id="freeModelsResult" class="result"></div>
+      </div>
     </div>
   </div>
   
@@ -380,11 +388,52 @@ const adminHTML = (nodes, accounts) => `<!DOCTYPE html>
     let accountList = ${JSON.stringify(accounts)};
     const FREE_MODELS = ${JSON.stringify(FREE_MODELS)};
     const DEFAULT_FREE_MODEL = '${DEFAULT_FREE_MODEL}';
-    let config = { defaultModel: DEFAULT_FREE_MODEL };
+    let config = { defaultModel: DEFAULT_FREE_MODEL, freeModels: FREE_MODELS.filter(m => m.id.endsWith('-free')).map(m => m.id) };
     
     // 加载配置
-    fetch('/api/config').then(r => r.json()).then(d => { config = d.config; });
-    
+    fetch('/api/config').then(r => r.json()).then(d => {
+      if (d.config) {
+        config = {
+          defaultModel: d.config.defaultModel || DEFAULT_FREE_MODEL,
+          freeModels: d.config.freeModels && Array.isArray(d.config.freeModels) && d.config.freeModels.length > 0
+            ? d.config.freeModels
+            : config.freeModels
+        };
+      }
+      initializeFreeModelsInput();
+    }).catch(() => {
+      initializeFreeModelsInput();
+    });
+
+    function initializeFreeModelsInput() {
+      const textarea = document.getElementById('freeModelsInput');
+      if (textarea) {
+        textarea.value = (config.freeModels || []).join('\\n');
+      }
+    }
+
+    function saveFreeModels() {
+      const value = document.getElementById('freeModelsInput').value.trim();
+      const list = value.split('\\n').map(s => s.trim()).filter(Boolean);
+      fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          defaultModel: config.defaultModel,
+          freeModels: list
+        })
+      }).then(r => r.json()).then(d => {
+        if (d.success) {
+          config.freeModels = list;
+          document.getElementById('freeModelsResult').textContent = '保存成功';
+        } else {
+          document.getElementById('freeModelsResult').textContent = d.error || '保存失败';
+        }
+      }).catch(err => {
+        document.getElementById('freeModelsResult').textContent = err.message || '保存失败';
+      });
+    }
+
     function showTab(tab) {
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -1070,6 +1119,9 @@ function route(req, res) {
     req.on('end', () => {
       const newConfig = JSON.parse(body);
       if (newConfig.defaultModel) config.defaultModel = newConfig.defaultModel;
+      if (newConfig.freeModels && Array.isArray(newConfig.freeModels)) {
+        config.freeModels = newConfig.freeModels;
+      }
       saveConfig();
       res.end(JSON.stringify({ success: true, config }));
     });
@@ -1214,7 +1266,7 @@ function route(req, res) {
     const startTime = Date.now();
     httpRequest(target.url + '/v1/chat/completions', {
       method: 'POST',
-      body: JSON.stringify({ messages: [{ role: 'user', content: 'test' }] }),
+      body: JSON.stringify({ model: 'big-pickle', messages: [{ role: 'user', content: 'test' }] }),
       headers: { 'Authorization': 'Bearer test' }
     })
     .then(result => {
@@ -1247,16 +1299,19 @@ function route(req, res) {
     req.on('end', () => {
       const startTime = Date.now();
       
-      // 处理模型：如果请求的是"free"，则使用worker配置的模型
+      // 处理模型："free" 或用户指定的免费模型 时，映射到可用默认模型
       let requestBody;
       try {
         requestBody = JSON.parse(body);
-        if (requestBody.model === 'free' || !requestBody.model) {
+        const originalModel = requestBody.model;
+        if (originalModel === 'free' || !originalModel || (config.freeModels || []).includes(originalModel)) {
           const modelToUse = target.model || config.defaultModel || DEFAULT_FREE_MODEL;
           requestBody.model = modelToUse;
           body = JSON.stringify(requestBody);
         }
-      } catch {}
+      } catch (e) {
+        // 不影响转发，继续使用原始 body
+      }
       
       httpRequest(target.url + pathname, { body, headers: req.headers })
         .then(result => {
@@ -1290,8 +1345,9 @@ function route(req, res) {
 async function testAllNodes() {
   for (const node of nodes) {
     try {
-      await httpRequest(node.url + '/api/info', { method: 'GET' });
+      await httpRequest(node.url + '/health', { method: 'GET' });
       node.status = '✅ 在线';
+      node.weight = node.weight || 10;
     } catch {
       node.status = '❌ 离线';
       node.weight = 0;

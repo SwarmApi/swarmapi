@@ -220,7 +220,7 @@ while true; do
     fi
 
     log "🚀 启动 Worker..."
-    WORKER_VERSION="$WORKER_VERSION" UPDATE_MODE="$UPDATE_MODE" "$WORKER_PATH" &
+    WORKER_VERSION="$WORKER_VERSION" UPDATE_MODE="$UPDATE_MODE" WORKER_SUPERVISED=1 "$WORKER_PATH" &
     WORKER_PID=$!
 
     if [ "$UPDATE_MODE" = "manual" ]; then

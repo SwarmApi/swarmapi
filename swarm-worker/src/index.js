@@ -180,8 +180,18 @@ async function forceUpdate() {
     log(`🔄 正在重启...`);
 
     setTimeout(() => {
+      const isSupervised = process.env.WORKER_SUPERVISED === '1' || process.env.WORKER_SUPERVISED === 'true';
+      if (isSupervised) {
+        log('🔧 由 worker-start.sh 管理，直接退出（supervisor 将重启）');
+        process.exit(0);
+        return;
+      }
+
       const workerBin = process.env.WORKER_PATH || process.execPath;
-      spawn(workerBin, [], {
+      const spawnArgs = process.env.WORKER_PATH ? [] : process.argv.slice(1);
+
+      log(`🔧 未检测到 supervisor，直接自启动新实例: ${workerBin} ${spawnArgs.join(' ')}`);
+      spawn(workerBin, spawnArgs, {
         detached: true,
         stdio: 'ignore',
         env: { ...process.env, WORKER_VERSION: currentVersion }
@@ -255,22 +265,19 @@ function httpRequest(targetUrl, options = {}) {
   });
 }
 
-async function callOpenCode(messages, model, headers = {}) {
-  const openaiUrl = 'https://api.opencode.ai/v1/chat/completions';
-  
+async function callOpenCode(rawBody, headers = {}) {
+  const openaiUrl = 'https://opencode.ai/zen/v1/chat/completions';
+
+  const body = typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody);
+
   return httpRequest(openaiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer public`,
-      'x-api-key': 'public',
       ...headers
     },
-    body: JSON.stringify({
-      model: model || 'gpt-5-nano',
-      messages: messages,
-      max_tokens: 4096
-    })
+    body
   });
 }
 
@@ -377,16 +384,36 @@ async function route(req, res) {
     req.on('end', async () => {
       const start = Date.now();
       requestLogs.push(`[${new Date().toISOString()}] 收到请求 ${pathname}`);
-      
+
+      let parsed;
+      let modelForLog = '-';
+      let messagesForLog = '-';
       try {
-        const parsed = JSON.parse(body);
-        const messages = parsed.messages || [];
-        const model = parsed.model || 'big-pickle';
-        const result = await callOpenCode(messages, model, req.headers);
-        
+        parsed = JSON.parse(body);
+        modelForLog = parsed.model || '-';
+        if (parsed.model === 'free') {
+          modelForLog = 'big-pickle';
+        }
+        if (Array.isArray(parsed.messages)) {
+          messagesForLog = parsed.messages.map(m => (m.content || '').replace(/\s+/g, ' ').slice(0, 150)).join(' | ');
+        }
+      } catch (e) {
+        // ignore parse errors,透明转发
+      }
+
+      requestLogs.push(`[${new Date().toISOString()}] 代理模型: ${modelForLog}, messages: ${messagesForLog}`);
+
+      if (parsed && parsed.model === 'free') {
+        parsed.model = 'big-pickle';
+        body = JSON.stringify(parsed);
+      }
+
+      try {
+        const result = await callOpenCode(body, req.headers);
+
         requestCount++;
         requestLogs.push(`[${new Date().toISOString()}] 响应成功 (${Date.now() - start}ms)`);
-        
+
         res.writeHead(result.statusCode, { 'Content-Type': 'application/json' });
         res.end(result.body);
       } catch (e) {

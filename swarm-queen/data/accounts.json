@@ -50,11 +50,11 @@
   {
     "id": "gh_1774779544791",
     "email": "pepers@oyv88.com",
-    "passwordHash": "f10790d83e8bd4ef9b36e0d316ccfb9f:b408a58ba5bafe749bf73b527a737a8f",
+    "passwordHash": "ab36c0f81e3cd797cc10dbe7f03fae63:d5aec0422893b7b56d87a8dd4251e586",
     "passwordRaw": "gsd0yv87",
     "username": "Pepers91",
     "proxyRegion": "德国",
-    "copilotResetDate": "2026-03-26",
+    "copilotResetDate": "2026-04-30",
     "containerUrls": [],
     "createdAt": "2026-03-29T10:19:04.894Z",
     "label": ""
@@ -178,5 +178,29 @@
     "containerUrls": [],
     "createdAt": "2026-03-29T10:37:31.233Z",
     "label": "swarm github"
+  },
+  {
+    "id": "gh_1774887718725",
+    "email": "deerflow@oyv88.com",
+    "username": "Deerflow999",
+    "passwordHash": "3b1609431ca43ddf3fac4f0c172b0022:904ea296cedf53b67dc81f7af197076e",
+    "passwordRaw": "gsd0yv87",
+    "label": "",
+    "proxyRegion": "日本",
+    "copilotResetDate": "2026-03-30",
+    "containerUrls": [],
+    "createdAt": "2026-03-30T16:21:58.775Z"
+  },
+  {
+    "id": "gh_1774888106197",
+    "email": "gh1024@oyv88.com",
+    "username": "Gh10244021",
+    "passwordHash": "9319598fb036e1e32ed914c19b24826a:418d5e1b5d93c77f4a8c902d2cdc6c43",
+    "passwordRaw": "gsd0yv87",
+    "label": "",
+    "proxyRegion": "日本",
+    "copilotResetDate": "2026-03-30",
+    "containerUrls": [],
+    "createdAt": "2026-03-30T16:28:26.242Z"
   }
 ]
