@@ -163,9 +163,10 @@ update_self_script() {
     "; then
         chmod +x "$tmp"
         if [ ! -f "$WORKER_START_PATH" ] || ! cmp -s "$tmp" "$WORKER_START_PATH"; then
-            log "🔄 检测到 worker-start.sh 新版本，替换并重启脚本"
+            log "🔄 检测到 worker-start.sh 新版本，替换"
             mv -f "$tmp" "$WORKER_START_PATH"
-            exec "$WORKER_START_PATH"
+            chmod +x "$WORKER_START_PATH"
+            # 脚本继续执行，下次运行时使用新版本
         fi
     fi
     rm -f "$tmp"
