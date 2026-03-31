@@ -239,23 +239,24 @@ while true; do
         continue
     fi
 
-    # periodic 模式默认（或 UPDATE_MODE=periodic）
-    while kill -0 "$WORKER_PID" 2>/dev/null; do
-        sleep "$CHECK_INTERVAL"
-
-        latest=$(get_version)
-        if [ -n "$latest" ] && [ "$latest" != "${WORKER_VERSION:-0.0.0}" ]; then
-            log "🛠️ 检测到新版本 $latest，更新并重启"
-            if download_worker "${WORKER_BASE}/worker"; then
-                WORKER_VERSION="$latest"
-                save_version "$latest"
-                kill -TERM "$WORKER_PID" 2>/dev/null || true
-                break
+    # periodic 模式：立即重启 + 后台版本检查
+    (
+        while kill -0 "$WORKER_PID" 2>/dev/null; do
+            sleep "$CHECK_INTERVAL"
+            latest=$(get_version)
+            if [ -n "$latest" ] && [ "$latest" != "${WORKER_VERSION:-0.0.0}" ]; then
+                log "🛠️ 检测到新版本 $latest，更新并重启"
+                if download_worker "${WORKER_BASE}/worker"; then
+                    WORKER_VERSION="$latest"
+                    save_version "$latest"
+                    kill -TERM "$WORKER_PID" 2>/dev/null || true
+                    exit 0
+                fi
             fi
-        fi
-    done
+        done
+    ) &
 
     wait "$WORKER_PID" 2>/dev/null
-    log "🔁 Worker 退出，重新启动"
+    log "🔁 Worker 退出，立即重新启动"
     sleep 1
 done
