@@ -448,7 +448,7 @@ const adminHTML = (nodes, accounts) => `<!DOCTYPE html>
     
     function normalizeUrl(url) {
       if (!url) return '';
-      return url.replace(/\/+$/, '');
+        return url.replace(new RegExp("/+$", "g"), '');
     }
 
     function updateNodeList() {
