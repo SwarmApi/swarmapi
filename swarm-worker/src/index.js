@@ -363,6 +363,7 @@ async function route(req, res) {
   }
 
   if (pathname === '/api/info') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
       role: 'worker',
       ip: localIP,
@@ -379,15 +380,18 @@ async function route(req, res) {
     try {
       const result = await forceUpdate();
       log(`🔔 /api/update 完成，新版本: ${currentVersion}`);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, version: currentVersion, message: result }));
     } catch (err) {
       log(`🔔 /api/update 失败: ${err.message}`);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: false, error: err.message }));
     }
     return;
   }
   
   if (pathname === '/api/logs' && method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ logs: requestLogs.slice(-50) }));
   }
   
@@ -442,8 +446,8 @@ async function route(req, res) {
     return;
   }
   
-  res.writeHead(404);
-  res.end('Not Found');
+  res.writeHead(404, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: 'Not Found' }));
 }
 
 const server = http.createServer(route);

@@ -1,6 +1,6 @@
 [
   {
-    "url": "https://yjgdjqbgqxtk.ap-northeast-1.clawcloudrun.com/",
+    "url": "https://yjgdjqbgqxtk.ap-northeast-1.clawcloudrun.com",
     "accountId": "gh_1774779644182",
     "status": "✅ 在线",
     "weight": 10,
@@ -26,7 +26,7 @@
     "model": ""
   },
   {
-    "url": "https://dpvwlfophjqq.eu-central-1.clawcloudrun.com/",
+    "url": "https://dpvwlfophjqq.eu-central-1.clawcloudrun.com",
     "accountId": "gh_1774779742362",
     "containerRegion": "ap-northeast-1",
     "containerLocation": "德国",

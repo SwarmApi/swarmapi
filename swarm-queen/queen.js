@@ -717,7 +717,7 @@ function editAccount(i) {
     async function testNode(i) {
       const node = nodeList[i];
       try {
-        const res = await fetch(node.url + '/api/info', { method: 'GET' });
+        const res = await fetch(normalizeUrl(node.url) + '/api/info', { method: 'GET' });
         if (res.ok) {
           node.status = '✅ 在线';
           node.weight = node.weight || 10;
@@ -967,17 +967,18 @@ function route(req, res) {
         saveAdmin(newAdmin);
         const sid = generateSessionId();
         sessions[sid] = { createdAt: Date.now() };
-        res.writeHead(200, { 'Set-Cookie': 'sessionId=' + sid + '; Path=/' });
+        res.writeHead(200, { 'Set-Cookie': 'sessionId=' + sid + '; Path=/', 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ success: true, sessionId: sid }));
       }
       
       if (md5Hash(password) === adminData.passwordHash) {
         const sid = generateSessionId();
         sessions[sid] = { createdAt: Date.now() };
-        res.writeHead(200, { 'Set-Cookie': 'sessionId=' + sid + '; Path=/' });
+        res.writeHead(200, { 'Set-Cookie': 'sessionId=' + sid + '; Path=/', 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ success: true, sessionId: sid }));
       }
       
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: false, error: '密码错误' }));
     });
     return;
@@ -985,11 +986,13 @@ function route(req, res) {
   
   if (pathname === '/api/admin/logout' && method === 'POST') {
     if (sessionId) delete sessions[sessionId];
+    res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ success: true }));
   }
   
   if (pathname === '/api/admin/password' && method === 'POST') {
     if (!verifySession(sessionId)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: '未授权' }));
     }
     
@@ -1000,11 +1003,13 @@ function route(req, res) {
       const adminData = loadAdmin();
       
       if (!adminData || md5Hash(oldPassword) !== adminData.passwordHash) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: '旧密码错误' }));
       }
       
       adminData.passwordHash = md5Hash(newPassword);
       saveAdmin(adminData);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ message: '密码已修改' }));
     });
     return;
@@ -1012,11 +1017,13 @@ function route(req, res) {
   
   // Workers API
   if (pathname === '/api/nodes' && method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ nodes }));
   }
   
   if (pathname === '/api/nodes' && method === 'POST') {
     if (!verifySession(sessionId)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: '未授权' }));
     }
     
@@ -1024,9 +1031,10 @@ function route(req, res) {
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
       const data = JSON.parse(body);
-      if (data.url && !nodes.find(n => n.url === data.url)) {
+      const normalizedUrl = normalizeUrl(data.url);
+      if (normalizedUrl && !nodes.find(n => n.url === normalizedUrl)) {
         nodes.push({
-          url: data.url,
+          url: normalizedUrl,
           accountId: data.accountId,
           accountLabel: data.accountLabel,
           containerRegion: data.containerRegion,
@@ -1041,6 +1049,7 @@ function route(req, res) {
         });
         saveNodes();
       }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ nodes }));
     });
     return;
@@ -1048,6 +1057,7 @@ function route(req, res) {
   
   if (pathname.startsWith('/api/nodes/') && method === 'DELETE') {
     if (!verifySession(sessionId)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: '未授权' }));
     }
     
@@ -1056,11 +1066,13 @@ function route(req, res) {
       nodes.splice(i, 1);
       saveNodes();
     }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ nodes }));
   }
 
   if (pathname.startsWith('/api/nodes/') && pathname.endsWith('/edit') && method === 'POST') {
     if (!verifySession(sessionId)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: '未授权' }));
     }
     
@@ -1072,25 +1084,30 @@ function route(req, res) {
       const { url, accountId, containerRegion, containerLocation, model } = JSON.parse(body);
       
       if (!isNaN(i) && nodes[i]) {
-        if (url !== undefined) nodes[i].url = url;
+        if (url !== undefined) nodes[i].url = normalizeUrl(url);
         if (accountId !== undefined) nodes[i].accountId = accountId;
         if (containerRegion !== undefined) nodes[i].containerRegion = containerRegion;
         if (containerLocation !== undefined) nodes[i].containerLocation = containerLocation;
         if (model !== undefined) nodes[i].model = model;
         saveNodes();
       }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ nodes }));
     });
     return;
   }
   
   if (pathname === '/api/nodes/test' && method === 'POST') {
-    testAllNodes().then(() => res.end(JSON.stringify({ nodes })));
+    testAllNodes().then(() => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ nodes }));
+    });
     return;
   }
   
   if (pathname === '/api/worker/update' && method === 'POST') {
     if (!verifySession(sessionId)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: '未授权' }));
     }
     
@@ -1098,13 +1115,15 @@ function route(req, res) {
     req.on('data', chunk => body += chunk);
     req.on('end', async () => {
       const { url } = JSON.parse(body);
-      const workerUrl = url.replace(/\/$/, '') + '/api/update';
+      const workerUrl = normalizeUrl(url) + '/api/update';
       console.log('🔄 更新 Worker:', workerUrl);
       try {
         const result = await httpRequest(workerUrl, { method: 'POST' });
+        res.writeHead(result.statusCode, { 'Content-Type': 'application/json' });
         res.end(result.body);
       } catch (e) {
         console.error('更新失败:', e.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: e.message }));
       }
     });
@@ -1113,6 +1132,7 @@ function route(req, res) {
 
   // Models API
   if (pathname === '/api/models' && method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
       models: FREE_MODELS,
       defaultModel: config.defaultModel || DEFAULT_FREE_MODEL
@@ -1120,11 +1140,13 @@ function route(req, res) {
   }
 
   if (pathname === '/api/config' && method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ config }));
   }
 
   if (pathname === '/api/config' && method === 'POST') {
     if (!verifySession(sessionId)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: '未授权' }));
     }
     let body = '';
@@ -1136,6 +1158,7 @@ function route(req, res) {
         config.freeModels = newConfig.freeModels;
       }
       saveConfig();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, config }));
     });
     return;
@@ -1143,11 +1166,13 @@ function route(req, res) {
   
   // 账户API
   if (pathname === '/api/accounts' && method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ accounts }));
   }
   
   if (pathname === '/api/accounts' && method === 'POST') {
     if (!verifySession(sessionId)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: '未授权' }));
     }
     
@@ -1157,6 +1182,7 @@ function route(req, res) {
       const { email, username, password, label, proxyRegion, copilotResetDate } = JSON.parse(body);
       
       if (!username || !password || !email) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: '缺少必要字段' }));
       }
       
@@ -1176,6 +1202,7 @@ function route(req, res) {
         createdAt: new Date().toISOString()
       });
       saveAccounts();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ accounts }));
     });
     return;
@@ -1183,6 +1210,7 @@ function route(req, res) {
   
   if (pathname.startsWith('/api/accounts/') && method === 'DELETE') {
     if (!verifySession(sessionId)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: '未授权' }));
     }
     
@@ -1191,12 +1219,14 @@ function route(req, res) {
       accounts.splice(i, 1);
       saveAccounts();
     }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ accounts }));
   }
   
   // 编辑账户API (使用POST /api/accounts/:id/edit)
   if (pathname.startsWith('/api/accounts/') && pathname.endsWith('/edit') && method === 'POST') {
     if (!verifySession(sessionId)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: '未授权' }));
     }
     
@@ -1219,6 +1249,7 @@ function route(req, res) {
         if (copilotResetDate !== undefined) accounts[i].copilotResetDate = copilotResetDate;
         saveAccounts();
       }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ accounts }));
     });
     return;
@@ -1227,6 +1258,7 @@ function route(req, res) {
   // 添加容器API
   if (pathname.startsWith('/api/accounts/') && pathname.endsWith('/containers') && method === 'POST') {
     if (!verifySession(sessionId)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: '未授权' }));
     }
     
@@ -1242,6 +1274,7 @@ function route(req, res) {
         accounts[i].containerUrls.push({ url, region, location });
         saveAccounts();
       }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ accounts }));
     });
     return;
@@ -1250,6 +1283,7 @@ function route(req, res) {
   // 删除容器API (使用POST /api/accounts/:i/containers/:j/delete)
   if (pathname.startsWith('/api/accounts/') && pathname.includes('/containers/') && pathname.endsWith('/delete') && method === 'POST') {
     if (!verifySession(sessionId)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: '未授权' }));
     }
     
@@ -1261,11 +1295,13 @@ function route(req, res) {
       accounts[i].containerUrls.splice(j, 1);
       saveAccounts();
     }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ accounts }));
   }
   
   // 日志API
   if (pathname === '/api/logs' && method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ logs: requestLogs.slice(-100) }));
   }
   
@@ -1273,11 +1309,12 @@ function route(req, res) {
   if (pathname === '/api/proxy/test' && method === 'POST') {
     const target = selectNode();
     if (!target) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ error: 'No nodes' }));
     }
     
     const startTime = Date.now();
-    httpRequest(target.url + '/v1/chat/completions', {
+    httpRequest(normalizeUrl(target.url) + '/v1/chat/completions', {
       method: 'POST',
       body: JSON.stringify({ model: 'big-pickle', messages: [{ role: 'user', content: 'test' }] }),
       headers: { 'Authorization': 'Bearer test' }
@@ -1287,6 +1324,7 @@ function route(req, res) {
       updateNodeStats(target.url, result.statusCode === 200, time);
       requestLogs.unshift({ time: new Date().toISOString(), msg: (result.statusCode === 200?'✅':'❌') + ' ' + target.url });
       if (requestLogs.length > 100) requestLogs.pop();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, time: time + 'ms' }));
     })
     .catch(err => {
@@ -1294,6 +1332,7 @@ function route(req, res) {
       updateNodeStats(target.url, false, time);
       requestLogs.unshift({ time: new Date().toISOString(), msg: '❌ ' + target.url });
       if (requestLogs.length > 100) requestLogs.pop();
+      res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: false, error: err.message }));
     });
     return;
@@ -1326,7 +1365,7 @@ function route(req, res) {
         // 不影响转发，继续使用原始 body
       }
       
-      httpRequest(target.url + pathname, { body, headers: req.headers })
+      httpRequest(normalizeUrl(target.url) + pathname, { body, headers: req.headers })
         .then(result => {
           const time = Date.now() - startTime;
           updateNodeStats(target.url, result.statusCode === 200, time);
@@ -1355,10 +1394,15 @@ function route(req, res) {
   res.end('Not Found');
 }
 
+// ========== 辅助函数 ==========
+function normalizeUrl(url) {
+  return url.replace(/\/+$/, ''); // 移除末尾的所有斜杠
+}
+
 async function testAllNodes() {
   for (const node of nodes) {
     try {
-      await httpRequest(node.url + '/health', { method: 'GET' });
+      await httpRequest(normalizeUrl(node.url) + '/health', { method: 'GET' });
       node.status = '✅ 在线';
       node.weight = node.weight || 10;
     } catch {
