@@ -807,8 +807,11 @@ function editAccount(i) {
       node.status = '⏳ API测试中';
       updateNodeList();
       try {
-        const target = normalizeUrl(node.url) + '/zen/v1/chat/completions';
-        const res = await fetch(target, {
+        // 直接测试后端 API：将 Worker URL 的域名替换为后端 API 域名
+        const workerUrl = normalizeUrl(node.url);
+        const testUrl = workerUrl.replace(/https?:\/\/[^\/]+/, 'https://opencode.ai') + '/zen/v1/chat/completions';
+        
+        const res = await fetch(testUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

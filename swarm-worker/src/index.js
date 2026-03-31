@@ -9,6 +9,7 @@ const path = require('path');
 const PORT = process.env.PORT || 44444;
 const UPDATE_URL = process.env.UPDATE_URL || 'https://raw.githubusercontent.com/SwarmApi/swarmapi/master/versions.json';
 const UPDATE_MODE = process.env.UPDATE_MODE || 'periodic';
+const BACKEND_API_URL = process.env.BACKEND_API_URL || 'https://opencode.ai/zen/v1/chat/completions';
 
 let currentVersion = process.env.WORKER_VERSION || '0.0.0';
 
@@ -273,7 +274,7 @@ function httpRequest(targetUrl, options = {}) {
 }
 
 async function callOpenCode(rawBody, headers = {}) {
-  const openaiUrl = 'https://opencode.ai/zen/v1/chat/completions';
+  const openaiUrl = BACKEND_API_URL;
 
   const body = typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody);
 
