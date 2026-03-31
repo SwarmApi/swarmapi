@@ -920,6 +920,19 @@ function route(req, res) {
   const pathname = url.parse(req.url).pathname;
   const method = req.method;
   
+  // CORS 支持
+  const origin = req.headers.origin || req.headers.referer?.split('/').slice(0, 3).join('/') || '*';
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  
+  // 处理 OPTIONS 预检请求
+  if (method === 'OPTIONS') {
+    res.writeHead(204);
+    return res.end();
+  }
+  
   const cookies = (req.headers.cookie || '').split(';').reduce((acc, cookie) => {
     const [k, v] = cookie.trim().split('=');
     acc[k] = v;

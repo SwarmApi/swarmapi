@@ -23,7 +23,7 @@ let startTime = Date.now();
 let isUpdating = false;
 let checkInterval = null;
 let lastHeartbeat = Date.now();
-const HEARTBEAT_INTERVAL = (process.env.HEARTBEAT_INTERVAL || 5) * 60 * 1000; // 默认5分钟
+const HEARTBEAT_INTERVAL = (process.env.HEARTBEAT_INTERVAL || 30) * 60 * 1000; // 默认30分钟
 
 const WORKER_PATH = process.env.WORKER_PATH || path.join(__dirname, '..', 'worker');
 const WORKER_START_PATH = process.env.WORKER_START_PATH || '/app/worker-start.sh';
@@ -339,6 +339,19 @@ async function route(req, res) {
   const pathname = new URL(req.url, `http://${req.headers.host}`).pathname;
   const method = req.method;
   
+  // CORS 支持
+  const origin = req.headers.origin || req.headers.referer?.split('/').slice(0, 3).join('/') || '*';
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  
+  // 处理 OPTIONS 预检请求
+  if (method === 'OPTIONS') {
+    res.writeHead(204);
+    return res.end();
+  }
+  
   if (pathname === '/' || pathname === '/index.html') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     return res.end(workerHTML);
@@ -384,6 +397,7 @@ async function route(req, res) {
     req.on('end', async () => {
       const start = Date.now();
       requestLogs.push(`[${new Date().toISOString()}] 收到请求 ${pathname}`);
+      if (requestLogs.length > 100) requestLogs.shift();
 
       let parsed;
       let modelForLog = '-';
@@ -402,6 +416,7 @@ async function route(req, res) {
       }
 
       requestLogs.push(`[${new Date().toISOString()}] 代理模型: ${modelForLog}, messages: ${messagesForLog}`);
+      if (requestLogs.length > 100) requestLogs.shift();
 
       if (parsed && parsed.model === 'free') {
         parsed.model = 'big-pickle';
@@ -413,11 +428,13 @@ async function route(req, res) {
 
         requestCount++;
         requestLogs.push(`[${new Date().toISOString()}] 响应成功 (${Date.now() - start}ms)`);
+        if (requestLogs.length > 100) requestLogs.shift();
 
         res.writeHead(result.statusCode, { 'Content-Type': 'application/json' });
         res.end(result.body);
       } catch (e) {
         requestLogs.push(`[${new Date().toISOString()}] 错误: ${e.message}`);
+        if (requestLogs.length > 100) requestLogs.shift();
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: e.message }));
       }
@@ -448,14 +465,42 @@ server.listen(PORT, '0.0.0.0', () => {
     const uptime = Date.now() - startTime;
     const uptimeMinutes = Math.floor(uptime / 60000);
     const uptimeHours = Math.floor(uptimeMinutes / 60);
+    const uptimeDays = Math.floor(uptimeHours / 24);
+    const displayHours = uptimeHours % 24;
     const uptimeMins = uptimeMinutes % 60;
+    
+    let uptimeStr;
+    if (uptimeDays > 0) {
+      uptimeStr = `${uptimeDays}d${displayHours}h${uptimeMins}m`;
+    } else {
+      uptimeStr = `${uptimeHours}h${uptimeMins}m`;
+    }
+    
     const mem = process.memoryUsage();
-    const memMB = Math.round(mem.heapUsed / 1024 / 1024);
-    const memMaxMB = Math.round(mem.heapTotal / 1024 / 1024);
+    const memUsedMB = Math.round(mem.rss / 1024 / 1024); // RSS - 实际使用的物理内存
 
-    const heartbeatLog = `💓 [心跳] 运行时间: ${uptimeHours}h${uptimeMins}m | 请求数: ${requestCount} | 内存: ${memMB}/${memMaxMB} MB`;
+    // 获取磁盘信息 - 使用 df 命令获取容器文件系统信息
+    let diskInfo = 'N/A';
+    try {
+      const { execSync } = require('child_process');
+      const dfOutput = execSync('df -h / | tail -1', { encoding: 'utf8' });
+      const parts = dfOutput.trim().split(/\s+/);
+      if (parts.length >= 5) {
+        // 在容器中，显示可用空间（总大小可能不准确）
+        diskInfo = `可用: ${parts[3]}`;
+      }
+    } catch (e) {
+      diskInfo = 'N/A';
+    }
+
+    // 获取 CPU 负载
+    const loadAvg = os.loadavg();
+    const cpuLoad = `负载: ${loadAvg[0].toFixed(2)}`;
+
+    const heartbeatLog = `💓 [心跳] 运行时间: ${uptimeStr} | 请求数: ${requestCount} | 内存: ${memUsedMB}MB | ${cpuLoad} | 磁盘: ${diskInfo}`;
     log(heartbeatLog);
     requestLogs.push(heartbeatLog);
+    if (requestLogs.length > 100) requestLogs.shift();
   }
 
   // 立即打印一次心跳

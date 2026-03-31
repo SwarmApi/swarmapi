@@ -16,7 +16,7 @@
     "url": "https://tqduierfcwcz.ap-southeast-1.clawcloudrun.com",
     "accountId": "gh_1774779644182",
     "status": "✅ 在线",
-    "weight": 0,
+    "weight": 10,
     "totalRequests": 0,
     "successRequests": 0,
     "totalTime": 0,
@@ -37,5 +37,18 @@
     "totalTime": 332,
     "failCount": 1,
     "model": ""
+  },
+  {
+    "url": "https://rbsmbxmxqnse.ap-northeast-1.clawcloudrun.com",
+    "accountId": "gh_1774778880588",
+    "containerRegion": "ap-northeast-1",
+    "containerLocation": "日本",
+    "model": "big-pickle",
+    "status": "✅ 在线",
+    "weight": 10,
+    "totalRequests": 0,
+    "successRequests": 0,
+    "totalTime": 0,
+    "failCount": 0
   }
 ]
