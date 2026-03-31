@@ -141,14 +141,21 @@ function httpRequest(targetUrl, options = {}) {
     const parsed = new URL(targetUrl);
     const client = parsed.protocol === 'https:' ? https : http;
     
-    const req = client.request(targetUrl, {
+    const reqOptions = {
       method: options.method || 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...options.headers
       },
       timeout: 120000
-    }, (res) => {
+    };
+    
+    // SSL 配置
+    if (parsed.protocol === 'https:') {
+      reqOptions.rejectUnauthorized = false;
+    }
+    
+    const req = client.request(targetUrl, reqOptions, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
@@ -334,6 +341,7 @@ const adminHTML = (nodes, accounts) => `<!DOCTYPE html>
           <button class="secondary" onclick="toggleNodeForm()">❌ 取消</button>
         </div>
         <button class="secondary" onclick="testAll()" style="margin-bottom:15px">🧪 测试全部</button>
+        <button class="secondary" onclick="testApiAll()" style="margin-bottom:15px">💬 API测试全部</button>
         <button class="secondary" onclick="updateAllNodes()" style="margin-bottom:15px">🔄 更新全部</button>
       </div>
       <div class="card" id="nodeList"></div>
@@ -478,7 +486,7 @@ const adminHTML = (nodes, accounts) => `<!DOCTYPE html>
         row.style.cssText = 'display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 0.5fr 1.5fr; gap:8px; padding:10px; background:rgba(0,0,0,0.3); border-radius:4px; align-items:center; border-left:3px solid #00d4ff; margin-bottom:4px';
 
         const successRate = n.totalRequests > 0 ? Math.round(n.successRequests / n.totalRequests * 100) : 0;
-        const statusColor = n.status === '正常' ? '#00ff00' : n.status === '失败' ? '#ff4444' : '#888';
+        const statusColor = (n.status || '').startsWith('✅') ? '#00ff00' : (n.status || '').startsWith('❌') ? '#ff4444' : '#888';
         const account = accountList.find(a => a.id === n.accountId);
         const accountDisplay = account ? (account.username || '-') : '-';
         const modelDisplay = n.model || '-';
@@ -508,12 +516,13 @@ const adminHTML = (nodes, accounts) => `<!DOCTYPE html>
         const testCol = document.createElement('div');
         testCol.style.display = 'flex';
         testCol.style.gap = '2px';
-        ['🧪','🔄'].forEach((icon, j) => {
+        ['🧪','💬','🔄'].forEach((icon, j) => {
           const btn = document.createElement('button');
           btn.className = 'small';
           btn.style.cssText = 'padding:2px 4px; font-size:10px';
           btn.textContent = icon;
           if (icon === '🧪') btn.onclick = () => testNode(i);
+          else if (icon === '💬') btn.onclick = () => testNodeApi(i);
           else btn.onclick = () => updateNode(i);
           testCol.appendChild(btn);
         });
@@ -791,6 +800,42 @@ function editAccount(i) {
         node.weight = 0;
       }
       updateNodeList();
+    }
+
+    async function testNodeApi(i) {
+      const node = nodeList[i];
+      node.status = '⏳ API测试中';
+      updateNodeList();
+      try {
+        const target = normalizeUrl(node.url) + '/v1/chat/completions';
+        const res = await fetch(target, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'big-pickle',
+            messages: [{ role: 'user', content: 'OpenCode API 测试' }],
+            max_tokens: 1
+          })
+        });
+
+        if (res.ok) {
+          node.status = '✅ API正常';
+          node.weight = node.weight || 10;
+        } else {
+          node.status = '❌ API失败';
+          node.weight = 0;
+        }
+      } catch (e) {
+        node.status = '❌ API错误';
+        node.weight = 0;
+      }
+      updateNodeList();
+    }
+
+    async function testApiAll() {
+      for (let i = 0; i < nodeList.length; i++) {
+        await testNodeApi(i);
+      }
     }
     
     async function updateNode(i) {
@@ -1163,6 +1208,44 @@ function route(req, res) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ nodes }));
     });
+    return;
+  }
+
+  if (pathname.startsWith('/api/nodes/') && pathname.endsWith('/test-api') && method === 'POST') {
+    const parts = pathname.split('/');
+    const index = parseInt(parts[3]);
+    if (isNaN(index) || !nodes[index]) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ success: false, error: '节点索引无效' }));
+    }
+
+    const node = nodes[index];
+    const targetUrl = normalizeUrl(node.url) + '/v1/chat/completions';
+    const requestBody = JSON.stringify({
+      model: 'big-pickle',
+      messages: [{ role: 'user', content: 'OpenCode API 测试' }],
+      max_tokens: 1
+    });
+
+    httpRequest(targetUrl, {
+      method: 'POST',
+      body: requestBody,
+      headers: { 'Content-Type': 'application/json' }
+    })
+      .then(result => {
+        const ok = result.statusCode === 200;
+        if (ok) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, statusCode: result.statusCode, body: result.body }));
+        } else {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, statusCode: result.statusCode, body: result.body }));
+        }
+      })
+      .catch(err => {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      });
     return;
   }
   

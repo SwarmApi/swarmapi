@@ -244,14 +244,21 @@ function httpRequest(targetUrl, options = {}) {
     const parsed = new URL(targetUrl);
     const client = parsed.protocol === 'https:' ? https : http;
     
-    const req = client.request(targetUrl, {
+    const reqOptions = {
       method: options.method || 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...options.headers
       },
       timeout: 120000
-    }, (res) => {
+    };
+    
+    // SSL 配置
+    if (parsed.protocol === 'https:') {
+      reqOptions.rejectUnauthorized = false;
+    }
+    
+    const req = client.request(targetUrl, reqOptions, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => resolve({ statusCode: res.statusCode, headers: res.headers, body: data }));
