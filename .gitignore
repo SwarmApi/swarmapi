@@ -1,3 +1,4 @@
 swarm-test/
 !.gitignore
 swarm-worker/node_modules/
+go-swarm-worker/
