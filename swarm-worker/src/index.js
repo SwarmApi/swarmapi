@@ -402,7 +402,7 @@ async function route(req, res) {
     return res.end(JSON.stringify({ logs: requestLogs.slice(-50) }));
   }
   
-  if (pathname.startsWith('/v1/') && method === 'POST') {
+  if (pathname.startsWith('/zen/v1/') && method === 'POST') {
     let body = '';
     req.on('data', chunk => body += chunk);
     req.on('end', async () => {

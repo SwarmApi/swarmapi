@@ -807,7 +807,7 @@ function editAccount(i) {
       node.status = '⏳ API测试中';
       updateNodeList();
       try {
-        const target = normalizeUrl(node.url) + '/v1/chat/completions';
+        const target = normalizeUrl(node.url) + '/zen/v1/chat/completions';
         const res = await fetch(target, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
